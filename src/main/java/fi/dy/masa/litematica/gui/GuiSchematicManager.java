@@ -5,10 +5,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import javax.annotation.Nullable;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.malilib.util.*;
+import fi.dy.masa.malilib.util.file_ops.FileCopier;
+import fi.dy.masa.malilib.util.file_ops.FileDeleter;
+import fi.dy.masa.malilib.util.file_ops.FileRenamer;
 import fi.dy.masa.malilib.config.IConfigOptionList;
 import fi.dy.masa.malilib.config.IConfigOptionListEntry;
 import fi.dy.masa.malilib.gui.GuiBase;
@@ -269,7 +273,7 @@ public class GuiSchematicManager extends GuiSchematicBrowserBase implements ISel
 		public void actionPerformedWithButton(ButtonBase button, int mouseButton)
 		{
 			if (this.type == Type.EDIT_SCHEMATIC && this.gui.editType == EditType.SET_PREVIEW
-				&& mouseButton == 1)
+				&& mouseButton == InputConstants.MOUSE_BUTTON_RIGHT)
 			{
 				if (previewGenerator != null)
 				{

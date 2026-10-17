@@ -7,7 +7,7 @@ import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 
-import fi.dy.masa.malilib.render.uniform.ChunkFixUniform;
+import fi.dy.masa.litematica.render.uniform.ChunkFixUniform;
 
 public class SchematicRenderState
 {

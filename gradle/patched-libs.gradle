@@ -1,0 +1,152 @@
+/*
+ * Patched copies of two third-party libraries, to silence this FML warning in the dev environment (and in the
+ * conditional-mixin copy that this mod bundles):
+ *
+ *   Mod <id> uses the deprecated `logoFile` property; change to `bannerFile` and/or (for square icons) `iconFile`
+ *
+ * What is changed: ONLY the key `logoFile` -> `iconFile` (same value) in META-INF/neoforge.mods.toml of
+ *   - me.fallenbreath:conditional-mixin-neoforge:0.6.4                 (LGPL-3.0-only)
+ *   - team.cagayakegirls.foxified:foxified-classtweaker:0.1.0-alpha.4  (Apache-2.0)
+ * Every other entry of each jar is copied unchanged and all licence notices stay in the jars. The patched files
+ * keep the exact same Maven coordinates, so MaFgLib's version requirements, FML version ranges and the jar-in-jar
+ * metadata remain valid.
+ *
+ * Safety: the original files are downloaded once into build/patched-libs and must match the pinned SHA-256
+ * digests below, otherwise the build stops. Nothing here is published anywhere.
+ *
+ * Limits: MaFgLib 0.6.0 nests its own (unpatched) conditional-mixin build, and foxified-classtweaker is a separate
+ * mod users install themselves, so a production install can still log these warnings.
+ *
+ * Delete this script (and the `apply from` line in build.gradle) as soon as upstream releases a fixed version.
+ */
+
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+
+def patchedLibs = [
+		[
+				group     : 'me.fallenbreath',
+				name      : 'conditional-mixin-neoforge',
+				version   : '0.6.4',
+				baseUrl   : 'https://maven.fallenbreath.me/releases',
+				jarSha256 : '0ae7b346d87879e81f276e6a590a6af1e723193e6eb3e94c1f71f7ab5b54d59f',
+				pomSha256 : '1746e8b962e9be26f7c4be992a3be03db1de58dd0f6d6eed85b908b21e855128'
+		],
+		[
+				group     : 'team.cagayakegirls.foxified',
+				name      : 'foxified-classtweaker',
+				version   : '0.1.0-alpha.4',
+				baseUrl   : 'https://maven.kessokuteatime.work/snapshots',
+				jarSha256 : 'e434d0664c46702652675d3d3a1b5986d9b78bdc2aafd32f5b07557dab3421a6',
+				pomSha256 : 'ba5910400440e9d7ebc10a5c2fb88aca0c289fd60dd0aeaaa6a3e7dc65692c5b'
+		]
+]
+
+def sha256Hex = { byte[] bytes ->
+	MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString()
+}
+
+def download = { String url ->
+	def conn = new URI(url).toURL().openConnection()
+	conn.connectTimeout = 20000
+	conn.readTimeout = 60000
+	conn.inputStream.withCloseable { it.bytes }
+}
+
+def patchModsToml = { byte[] original, String what ->
+	def text = new String(original, StandardCharsets.UTF_8)
+	def matcher = text =~ /(?m)^(\s*)logoFile(\s*=)/
+	if (matcher.count != 1) {
+		throw new GradleException("patched-libs: expected exactly one 'logoFile' key in ${what} neoforge.mods.toml, found ${matcher.count}")
+	}
+	text.replaceFirst(/(?m)^(\s*)logoFile(\s*=)/, '$1iconFile$2').getBytes(StandardCharsets.UTF_8)
+}
+
+def patchJar = { byte[] originalJar, Path target, String what ->
+	Path tmp = Files.createTempFile(target.parent, 'patch', '.tmp')
+	Path source = Files.createTempFile(target.parent, 'orig', '.tmp')
+	try {
+		Files.write(source, originalJar)
+		boolean patched = false
+		new ZipFile(source.toFile()).withCloseable { zip ->
+			new ZipOutputStream(Files.newOutputStream(tmp)).withCloseable { out ->
+				zip.entries().each { ZipEntry old ->
+					def entry = new ZipEntry(old.name)
+					entry.time = old.time
+					if (old.comment != null) {
+						entry.comment = old.comment
+					}
+					out.putNextEntry(entry)
+					if (!old.directory) {
+						byte[] data = zip.getInputStream(old).withCloseable { it.bytes }
+						if (old.name == 'META-INF/neoforge.mods.toml') {
+							data = patchModsToml(data, what)
+							patched = true
+						}
+						out.write(data)
+					}
+					out.closeEntry()
+				}
+			}
+		}
+		if (!patched) {
+			throw new GradleException("patched-libs: META-INF/neoforge.mods.toml not found in ${what}")
+		}
+		Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING)
+	} finally {
+		Files.deleteIfExists(tmp)
+		Files.deleteIfExists(source)
+	}
+}
+
+def repoRoot = layout.buildDirectory.dir('patched-libs/repo').get().asFile
+
+patchedLibs.each { lib ->
+	def dir = new File(repoRoot, "${lib.group.replace('.', '/')}/${lib.name}/${lib.version}")
+	def jarFile = new File(dir, "${lib.name}-${lib.version}.jar")
+	def pomFile = new File(dir, "${lib.name}-${lib.version}.pom")
+
+	if (!jarFile.exists() || !pomFile.exists()) {
+		def what = "${lib.group}:${lib.name}:${lib.version}"
+		def base = "${lib.baseUrl}/${lib.group.replace('.', '/')}/${lib.name}/${lib.version}/${lib.name}-${lib.version}"
+		byte[] originalJar
+		byte[] originalPom
+		try {
+			originalJar = download("${base}.jar")
+			originalPom = download("${base}.pom")
+		} catch (IOException e) {
+			throw new GradleException("patched-libs: could not download ${what} (needed once to build the patched copy): ${e.message}", e)
+		}
+		if (sha256Hex(originalJar) != lib.jarSha256) {
+			throw new GradleException("patched-libs: SHA-256 of the downloaded ${what} jar does not match the pinned value, refusing to patch it")
+		}
+		if (sha256Hex(originalPom) != lib.pomSha256) {
+			throw new GradleException("patched-libs: SHA-256 of the downloaded ${what} pom does not match the pinned value, refusing to use it")
+		}
+
+		dir.mkdirs()
+		patchJar(originalJar, jarFile.toPath(), what)
+		Files.write(pomFile.toPath(), originalPom)
+		logger.lifecycle("patched-libs: created patched copy of ${what}")
+	}
+}
+
+repositories {
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = 'ForgematicaPatchedLibs'
+				url = repoRoot.toURI()
+			}
+		}
+		filter { descriptor ->
+			patchedLibs.each { lib -> descriptor.includeVersion(lib.group, lib.name, lib.version) }
+		}
+	}
+}

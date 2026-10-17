@@ -1,6 +1,7 @@
 package fi.dy.masa.litematica.gui;
 
 import javax.annotation.Nullable;
+import com.mojang.blaze3d.platform.InputConstants;
 import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.config.Hotkeys;
 import fi.dy.masa.litematica.gui.GuiMainMenu.ButtonListenerChangeMenu;
@@ -480,7 +481,7 @@ public class GuiSchematicVerifier   extends GuiListBase<BlockMismatchEntry, Widg
                     SchematicPlacement placement = this.parent.placement;
                     this.parent.verifier.reset();
                     BlockInfoListType type = placement.getSchematicVerifierType();
-                    placement.setSchematicVerifierType((BlockInfoListType) type.cycle(mouseButton == 0));
+                    placement.setSchematicVerifierType((BlockInfoListType) type.cycle(mouseButton == InputConstants.MOUSE_BUTTON_LEFT));
                     break;
 
                 case RESET_IGNORED:

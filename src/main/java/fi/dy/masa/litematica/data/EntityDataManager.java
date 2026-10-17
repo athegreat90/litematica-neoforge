@@ -452,7 +452,7 @@ public class EntityDataManager implements IClientTickHandler, IDataSyncer
     public void onGameInit()
     {
         ClientPlayHandler.getInstance().registerClientPlayHandler(HANDLER);
-        HANDLER.registerPlayPayload(ServuxLitematicaPacket.Payload.ID, ServuxLitematicaPacket.Payload.CODEC, IPluginClientPlayHandler.BOTH_CLIENT);
+        // The Servux payload itself is registered in the Forgematica mod constructor (must happen before NeoForge closes payload registration)
     }
 
     @Override

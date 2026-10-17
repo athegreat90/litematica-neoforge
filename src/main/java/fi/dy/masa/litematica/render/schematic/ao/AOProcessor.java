@@ -4,6 +4,8 @@ import com.mojang.blaze3d.vertex.QuadInstance;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.block.state.BlockState;
 
 import fi.dy.masa.litematica.config.Configs;
@@ -34,6 +36,16 @@ public abstract class AOProcessor
     public int getLight(final BlockAndTintGetter world, final BlockState state, final BlockPos pos)
     {
         return this.lightmap.brightnessCache.getLight(state, world, pos);
+    }
+
+    /**
+     * Same rule as vanilla's BlockModelLighter#getDirectionalBrightness:
+     * a quad can override the direction that is used for the directional shading.
+     */
+    protected static float getDirectionalBrightness(final CardinalLighting lighting, final BakedQuad quad, final Direction face)
+    {
+        Direction override = quad.materialInfo().shadeDirectionOverride();
+        return lighting.byFace(override != null ? override : face);
     }
 
     public abstract void prepareSmooth(final BlockAndTintGetter world, final BlockState state, final BlockPos pos,

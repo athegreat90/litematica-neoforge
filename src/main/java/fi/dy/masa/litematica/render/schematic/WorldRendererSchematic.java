@@ -8,19 +8,18 @@ import com.google.common.collect.ImmutableList;
 import org.apache.logging.log4j.Logger;
 import org.joml.*;
 
-import com.mojang.blaze3d.IndexType;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.IndexType;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.AddressMode;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.AddressMode;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Camera;
 import net.minecraft.client.CameraType;
@@ -28,7 +27,7 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.ClientMannequin;
 import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.renderer.DynamicUniforms;
+import net.minecraft.client.renderer.DynamicGpuData;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.FluidModel;
@@ -78,7 +77,7 @@ import net.minecraft.world.phys.Vec3;
 import fi.dy.masa.malilib.compat.iris.IrisCompat;
 import fi.dy.masa.malilib.gui.Message;
 import fi.dy.masa.malilib.render.RenderUtils;
-import fi.dy.masa.malilib.render.uniform.ChunkFixUniform;
+import fi.dy.masa.litematica.render.uniform.ChunkFixUniform;
 import fi.dy.masa.malilib.util.EntityUtils;
 import fi.dy.masa.malilib.util.InfoUtils;
 import fi.dy.masa.malilib.util.MathUtils;
@@ -704,7 +703,7 @@ public class WorldRendererSchematic implements IWorldSchematicRenderer
 //        RenderSystem.assertOnRenderThread();
         profiler.push("layer_multi_phase");
 
-	    List<DynamicUniforms.Transform> transformValues = new ArrayList<>();
+	    List<DynamicGpuData.Transform> transformValues = new ArrayList<>();
         EnumMap<ChunkSectionLayer, List<RenderPass.Draw<GpuBufferSlice[]>>> renderMap = new EnumMap<>(ChunkSectionLayer.class);
 
         for (ChunkSectionLayer layer : ChunkSectionLayer.values())
@@ -789,9 +788,7 @@ public class WorldRendererSchematic implements IWorldSchematicRenderer
 
                     int pos = transformValues.size();
 
-                    VertexFormat vf = layer.pipeline().getVertexFormatBinding(0);
-
-                    transformValues.add(new DynamicUniforms.Transform(
+                    transformValues.add(new DynamicGpuData.Transform(
                             matrix4fc,
                             colorMod,
                             new Vector3f((float) (chunkOrigin.getX() - cameraX), (float) (chunkOrigin.getY() - cameraY), (float) (chunkOrigin.getZ() - cameraZ)),
@@ -807,7 +804,7 @@ public class WorldRendererSchematic implements IWorldSchematicRenderer
                                      buffers.getIndexCount(),
                                      0,
                                      (slices, uploader) ->
-                                             uploader.upload("DynamicTransforms", ((GpuBufferSlice[]) slices)[pos])
+                                             uploader.setUniform("DynamicTransforms", ((GpuBufferSlice[]) slices)[pos])
                              ));
 
                     startedDrawing = true;
@@ -822,7 +819,7 @@ public class WorldRendererSchematic implements IWorldSchematicRenderer
             this.getSchematicRenderState().chunkFixUniform.updateBuffer(atlasWidth, atlasHeight, 1.0f);
             GpuBufferSlice[] transformSlices = RenderSystem.getDynamicUniforms()
                                                            .writeTransforms(
-                                                                   transformValues.toArray(new DynamicUniforms.Transform[0])
+                                                                   transformValues.toArray(new DynamicGpuData.Transform[0])
                                                            );
 
             profiler.popPush("fill_batch_draw");
@@ -840,7 +837,7 @@ public class WorldRendererSchematic implements IWorldSchematicRenderer
     }
 
     @Override
-    public void drawBlockLayerGroup(ChunkSectionLayerGroup group, @Nullable GpuSampler sampler)
+    public void drawBlockLayerGroup(ChunkSectionLayerGroup group, @Nullable GpuSampler sampler, @Nullable RenderPass pass)
     {
 //        LOGGER.warn("[WorldRenderer] drawBlockLayerGroup() [{}]", group.label());
         if (this.getSchematicRenderState().hasBatchDraw() && this.shouldDraw)
@@ -850,11 +847,9 @@ public class WorldRendererSchematic implements IWorldSchematicRenderer
             // Disable fog in the Schematic World
             RenderSystem.setShaderFog(this.getEmptyFogBuffer());
 
-            if (sampler != null && this.gpuSampler == null)
-            {
-                this.setGpuSampler(sampler);
-            }
-
+            // The sampler passed in is vanilla's LevelRenderer#chunkLayerSampler: vanilla closes and recreates it
+            // (texture filtering change) and closes it on shutdown, so it is only used for this draw and never stored.
+            // Only the fallback from getGpuSampler() is owned (and closed) by the schematic renderer.
             if (sampler == null)
             {
                 sampler = this.getGpuSampler();
@@ -866,8 +861,14 @@ public class WorldRendererSchematic implements IWorldSchematicRenderer
                 IrisRenderingFix.INSTANCE.wasWarned = true;
             }
 
-            this.getSchematicRenderState().getBatchDraw().draw(group, sampler, this.profiler);
+            this.getSchematicRenderState().getBatchDraw().draw(group, sampler, this.profiler, pass);
             RenderSystem.setShaderFog(this.vanillaFogBuffer);
+
+            if (pass != null)
+            {
+                // We drew into the pass vanilla is recording: hand it back with the vanilla fog bound again
+                RenderSystem.bindDefaultUniforms(pass);
+            }
 
             this.profiler.pop();
         }
@@ -1179,7 +1180,7 @@ public class WorldRendererSchematic implements IWorldSchematicRenderer
 
             RenderTarget mainFb = RenderUtils.mainTarget();
             GpuTextureView texture1 = mainFb.getColorTextureView();
-            GpuTextureView texture2 = mainFb.useDepth ? mainFb.getDepthTextureView() : null;
+            GpuTextureView texture2 = mainFb.hasDepth() ? mainFb.getDepthTextureView() : null;
             RenderSystem.AutoStorageIndexBuffer shapeIndexBuffer = RenderSystem.getSequentialBuffer(type.topology());
             GpuBuffer indexBuffer;
             IndexType indexType;
@@ -1217,7 +1218,7 @@ public class WorldRendererSchematic implements IWorldSchematicRenderer
                                                                  texture1, Optional.empty(),
                                                                  texture2, OptionalDouble.empty()))
             {
-                pass.setPipeline(pipeline);
+                pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
                 RenderSystem.bindDefaultUniforms(pass);
                 pass.setUniform("DynamicTransforms", gpuSlice);
                 pass.setVertexBuffer(0, buffers.getVertexBuffer().slice());

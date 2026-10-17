@@ -28,6 +28,7 @@ import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -110,7 +111,7 @@ public class WorldUtils
         }
 
 //        WorldSchematic world = SchematicWorldHandler.createSchematicWorld(null);
-        BlockPos size = new BlockPos(origSchematic.getTotalSize());
+        BlockPos size = BlockPos.ZERO.offset(origSchematic.getTotalSize());
         TemporaryWorldHolder holder = TemporaryWorldManager.INSTANCE.getTemporaryWorld("sponge_to_litematica", BlockPos.ZERO, size);
 //        List<Pair<Integer, Integer>> tempChunks = loadChunksSchematicWorld(world, BlockPos.ZERO, size);
         SchematicPlacement schematicPlacement = SchematicPlacement.createForSchematicConversion(origSchematic, BlockPos.ZERO);
@@ -246,7 +247,7 @@ public class WorldUtils
         area.setSelectedSubRegionBox(subRegionName);
         Box box = area.getSelectedSubRegionBox();
         area.setSubRegionCornerPos(box, Corner.CORNER_1, BlockPos.ZERO);
-        area.setSubRegionCornerPos(box, Corner.CORNER_2, (new BlockPos(schematic.getSize())).offset(-1, -1, -1));
+        area.setSubRegionCornerPos(box, Corner.CORNER_2, BlockPos.ZERO.offset(schematic.getSize()).offset(-1, -1, -1));
         LitematicaSchematic.SchematicSaveInfo info = new LitematicaSchematic.SchematicSaveInfo(false, false);
 
         LitematicaSchematic newSchematic = LitematicaSchematic.createFromWorld(holder.world(), area, info, "?", feedback);
@@ -294,7 +295,7 @@ public class WorldUtils
         }
 
 //        WorldSchematic world = SchematicWorldHandler.createSchematicWorld(null);
-        BlockPos size = new BlockPos(origStructure.getTotalSize());
+        BlockPos size = BlockPos.ZERO.offset(origStructure.getTotalSize());
 //        List<Pair<Integer, Integer>> tempChunks = loadChunksSchematicWorld(world, BlockPos.ZERO, size);
         TemporaryWorldHolder holder = TemporaryWorldManager.INSTANCE.getTemporaryWorld("structure_to_litematica", BlockPos.ZERO, size);
         SchematicPlacement schematicPlacement = SchematicPlacement.createForSchematicConversion(origStructure, BlockPos.ZERO);
@@ -452,7 +453,7 @@ public class WorldUtils
 
 //        WorldSchematic world = SchematicWorldHandler.createSchematicWorld(null);
 
-        BlockPos size = new BlockPos(litematicaSchematic.getTotalSize());
+        BlockPos size = BlockPos.ZERO.offset(litematicaSchematic.getTotalSize());
 //        List<Pair<Integer, Integer>> tempChunks = loadChunksSchematicWorld(world, BlockPos.ZERO, size);
         SchematicPlacement schematicPlacement = SchematicPlacement.createForSchematicConversion(litematicaSchematic, BlockPos.ZERO);
         TemporaryWorldHolder holder = TemporaryWorldManager.INSTANCE.getTemporaryWorld("litematic_to_structure", BlockPos.ZERO, size);
@@ -676,9 +677,9 @@ public class WorldUtils
                 {
                     for (int i = 0; i < screenTextArr.length; ++i)
                     {
-                        screenTextArr[i] = textSchematic.getMessage(i, false).getString();
+                        screenTextArr[i] = textSchematic.getMessages(false).get(i).getString();
                     }
-                    beClient.setText(textSchematic, front);
+                    beClient.setText(textSchematic, front ? SignTextSlot.FRONT : SignTextSlot.BACK);
                 }
             }
         }
@@ -883,10 +884,10 @@ public class WorldUtils
                 InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, hitResult);
 
                 // swing hand fix, see MinecraftClient#doItemUse
-                if (InteractionResult.SUCCESS.swingSource().equals(InteractionResult.SwingSource.CLIENT) &&
+                if (InteractionResult.SUCCESS.swingSource().equals(InteractionResult.SwingSource.PREDICTED) &&
                     Configs.Generic.EASY_PLACE_SWING_HAND.getBooleanValue())
                 {
-                    mc.player.swing(hand);
+                    mc.player.swing(hand, mc.player.getItemInHand(hand).getInteractAnimation(), false);
                 }
 
                 if (stateSchematic.getBlock() instanceof SlabBlock && stateSchematic.getValue(SlabBlock.TYPE) == SlabType.DOUBLE)

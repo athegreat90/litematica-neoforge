@@ -627,13 +627,13 @@ public class EasyPlaceUtils
 
 		if (result == InteractionResult.PASS)
 		{
-			if (InteractionResult.SUCCESS.swingSource().equals(InteractionResult.SwingSource.CLIENT) &&
+			if (InteractionResult.SUCCESS.swingSource().equals(InteractionResult.SwingSource.PREDICTED) &&
 				Configs.Generic.EASY_PLACE_SWING_HAND.getBooleanValue())
 			{
-				player.swing(hand);
+				player.swing(hand, player.getItemInHand(hand).getInteractAnimation(), false);
 			}
 			//GameWrap.getClient().entityRenderer.itemRenderer.resetEquippedProgress(hand);
-			mc.getEntityRenderDispatcher().getItemInHandRenderer().itemUsed(hand);
+			mc.player.itemUsed(hand);
 
 			if (isSlab && stateSchematic.getValue(SlabBlock.TYPE).equals(SlabType.DOUBLE))
 			{

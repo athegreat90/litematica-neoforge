@@ -5,8 +5,9 @@ import javax.annotation.Nonnull;
 import org.joml.Matrix4fc;
 import org.jspecify.annotations.Nullable;
 
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
@@ -32,7 +33,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 
-import fi.dy.masa.malilib.render.uniform.ChunkFixUniform;
+import fi.dy.masa.litematica.render.uniform.ChunkFixUniform;
 import fi.dy.masa.litematica.render.schematic.*;
 import fi.dy.masa.litematica.util.invoker.IEntityHitboxDebugRendererInvoker;
 import fi.dy.masa.litematica.world.ChunkSchematicState;
@@ -100,7 +101,10 @@ public interface IWorldSchematicRenderer
 
 	boolean renderFluid(FluidModelRendererSchematic renderer, BlockAndTintGetter world, BlockState blockState, FluidState fluidState, BlockPos pos, FluidRenderer.Output output, final float offsetY);
 
-	void drawBlockLayerGroup(ChunkSectionLayerGroup group, @Nullable GpuSampler sampler);
+	/**
+	 * @param pass The RenderPass vanilla is currently recording into, or null to use a pass of our own.
+	 */
+	void drawBlockLayerGroup(ChunkSectionLayerGroup group, @Nullable GpuSampler sampler, @Nullable RenderPass pass);
 
 	void scheduleTranslucentSorting(Vec3 cameraPos, ProfilerFiller profiler);
 

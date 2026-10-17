@@ -1,7 +1,8 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:fog.glsl>
-#moj_import <minecraft:dynamictransforms.glsl>
+#include <minecraft:fog.glsl>
+#include <minecraft:dynamictransforms.glsl>
 
 layout(std140) uniform ChunkFix {
     ivec2 TextureSize;
@@ -12,12 +13,12 @@ layout(std140) uniform ChunkFix {
 
 uniform sampler2D Sampler0;
 
-in float sphericalVertexDistance;
-in float cylindricalVertexDistance;
-in vec4 vertexColor;
-in vec2 texCoord0;
+layout(location = 0) in float sphericalVertexDistance;
+layout(location = 1) in float cylindricalVertexDistance;
+layout(location = 2) in vec4 vertexColor;
+layout(location = 3) in vec2 texCoord0;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 vec4 sampleNearest(sampler2D source, vec2 uv, vec2 pixelSize, vec2 du, vec2 dv, vec2 texelScreenSize) {
     // Convert our UV back up to texel coordinates and find out how far over we are from the center of each pixel

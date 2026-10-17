@@ -21,11 +21,13 @@ public abstract class MixinGameRenderer
 	@Shadow @Final private Camera mainCamera;
 
 	@Inject(method = "extractCamera", at = @At("TAIL"))
-	private void litematica_updateCameraState(DeltaTracker deltaTracker, float worldPartialTicks, float cameraEntityPartialTicks, CallbackInfo ci,
+	private void litematica_updateCameraState(DeltaTracker deltaTracker, float worldPartialTicks, CallbackInfo ci,
 	                                          @Local(name = "cameraState") CameraRenderState cameraState)
 	{
 		// Why Iris?
 //		if (IrisCompat.isShaderActive()) { return; }
+		// 26.3 no longer passes this in; Camera derives the same value from the DeltaTracker
+		float cameraEntityPartialTicks = this.mainCamera.getCameraEntityPartialTicks(deltaTracker);
 		LitematicaRenderer.getInstance().updateCameraState(this.mainCamera, cameraEntityPartialTicks, cameraState);
 	}
 }

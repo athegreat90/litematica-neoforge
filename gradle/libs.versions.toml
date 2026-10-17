@@ -1,8 +1,8 @@
 [versions]
 range-fml = "[4,)"
-range-game = "[26.2,)"
-range-neoforge = "[26.2,)"
-range-mafglib = "[0.4,)"
+range-game = "[26.3,26.4)"
+range-neoforge = "[26.3,26.4)"
+range-mafglib = "[0.6,)"
 
 mod-link = "https://github.com/CagayakeGirls/litematica-neoforge"
 

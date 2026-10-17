@@ -1,6 +1,7 @@
 package fi.dy.masa.litematica.gui;
 
 import javax.annotation.Nullable;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import fi.dy.masa.litematica.Reference;
@@ -220,7 +221,7 @@ public class GuiMainMenu extends GuiBase
         @Override
         public void actionPerformedWithButton(ButtonBase button, int mouseButton)
         {
-            ToolMode mode = DataManager.getToolMode().cycle(Minecraft.getInstance().player, mouseButton == 0);
+            ToolMode mode = DataManager.getToolMode().cycle(Minecraft.getInstance().player, mouseButton == InputConstants.MOUSE_BUTTON_LEFT);
             DataManager.setToolMode(mode);
             this.gui.initGui();
         }

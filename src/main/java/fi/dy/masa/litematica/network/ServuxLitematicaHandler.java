@@ -7,7 +7,6 @@ import org.jspecify.annotations.NonNull;
 
 //import net.fabricmc.api.EnvType;
 //import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.nbt.CompoundTag;
@@ -17,6 +16,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.Util;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import fi.dy.masa.malilib.network.IClientPayloadData;
 import fi.dy.masa.malilib.network.IPluginClientPlayHandler;
 import fi.dy.masa.malilib.network.PacketSplitter;
@@ -30,14 +30,7 @@ import fi.dy.masa.litematica.schematic.placement.SchematicPlacement;
 //@Environment(EnvType.CLIENT)
 public abstract class ServuxLitematicaHandler<T extends CustomPacketPayload> implements IPluginClientPlayHandler<T>
 {
-    private final static ServuxLitematicaHandler<ServuxLitematicaPacket.Payload> INSTANCE = new ServuxLitematicaHandler<>()
-    {
-        @Override
-        public void receive(ServuxLitematicaPacket.@NonNull Payload payload, ClientPlayNetworking.@NonNull Context context)
-        {
-            ServuxLitematicaHandler.INSTANCE.receivePlayPayload(payload, context);
-        }
-    };
+    private final static ServuxLitematicaHandler<ServuxLitematicaPacket.Payload> INSTANCE = new ServuxLitematicaHandler<>() {};
     public static ServuxLitematicaHandler<ServuxLitematicaPacket.Payload> getInstance() { return INSTANCE; }
 
     public static final Identifier CHANNEL_ID = Identifier.fromNamespaceAndPath("servux", "litematics");
@@ -190,7 +183,19 @@ public abstract class ServuxLitematicaHandler<T extends CustomPacketPayload> imp
     }
 
     @Override
-    public void receivePlayPayload(T payload, ClientPlayNetworking.Context ctx)
+    public void tickFailures()
+    {
+        this.failures++;
+    }
+
+    @Override
+    public boolean checkFailures()
+    {
+        return this.failures <= MAX_FAILURES;
+    }
+
+    @Override
+    public void receivePlayPayload(T payload, IPayloadContext ctx)
     {
         if (payload.type().id().equals(CHANNEL_ID))
         {

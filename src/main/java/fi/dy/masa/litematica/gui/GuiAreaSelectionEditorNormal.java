@@ -3,6 +3,7 @@ package fi.dy.masa.litematica.gui;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
 import fi.dy.masa.malilib.config.options.ConfigHotkey;
 import fi.dy.masa.malilib.gui.*;
@@ -435,7 +436,7 @@ public class GuiAreaSelectionEditorNormal extends GuiListBase<String, WidgetSele
         @Override
         public void actionPerformedWithButton(ButtonBase button, int mouseButton)
         {
-            int amount = mouseButton == 1 ? -1 : 1;
+            int amount = mouseButton == InputConstants.MOUSE_BUTTON_RIGHT ? -1 : 1;
             if (GuiBase.isCtrlDown()) { amount *= 100; }
             if (GuiBase.isShiftDown()) { amount *= 10; }
             if (GuiBase.isAltDown()) { amount *= 5; }

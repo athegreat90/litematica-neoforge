@@ -14,8 +14,8 @@ import fi.dy.masa.malilib.gui.widgets.WidgetFileBrowserBase.DirectoryEntry;
 import fi.dy.masa.malilib.gui.widgets.WidgetFileBrowserBase.DirectoryEntryType;
 import fi.dy.masa.malilib.render.GuiContext;
 import fi.dy.masa.malilib.util.FileNameUtils;
-import fi.dy.masa.malilib.util.KeyCodes;
 import fi.dy.masa.malilib.util.StringUtils;
+import fi.dy.masa.malilib.util.input.KeyCodes;
 import fi.dy.masa.litematica.schematic.LitematicaSchematic;
 
 public abstract class GuiSchematicSaveBase extends GuiSchematicBrowserBase implements ISelectionListener<DirectoryEntry>
@@ -186,7 +186,7 @@ public abstract class GuiSchematicSaveBase extends GuiSchematicBrowserBase imple
             this.getListWidget().clearSelection();
             return true;
         }
-        else if (input.key() == KeyCodes.KEY_TAB)
+        else if (input.keycode() == KeyCodes.KEY_TAB)
         {
             this.textField.setFocusedWrapper(! this.textField.isFocusedWrapper());
             return true;

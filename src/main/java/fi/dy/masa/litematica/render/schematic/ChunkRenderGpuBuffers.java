@@ -3,8 +3,8 @@ package fi.dy.masa.litematica.render.schematic;
 import java.util.function.Supplier;
 import org.jetbrains.annotations.Nullable;
 
-import com.mojang.blaze3d.IndexType;
-import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.pipeline.IndexType;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
 
 public class ChunkRenderGpuBuffers implements AutoCloseable
 {

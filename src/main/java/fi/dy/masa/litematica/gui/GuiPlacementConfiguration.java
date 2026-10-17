@@ -1,6 +1,7 @@
 package fi.dy.masa.litematica.gui;
 
 import javax.annotation.Nullable;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Mirror;
@@ -338,7 +339,7 @@ public class GuiPlacementConfiguration  extends GuiListBase<SubRegionPlacement, 
                 return;
             }
 
-            int amount = mouseButton == 1 ? -1 : 1;
+            int amount = mouseButton == InputConstants.MOUSE_BUTTON_RIGHT ? -1 : 1;
 
             if (GuiBase.isShiftDown())
             {
@@ -360,7 +361,7 @@ public class GuiPlacementConfiguration  extends GuiListBase<SubRegionPlacement, 
 
                 case ROTATE:
                 {
-                    boolean reverse = mouseButton == 1;
+                    boolean reverse = mouseButton == InputConstants.MOUSE_BUTTON_RIGHT;
                     Rotation rotation = PositionUtils.cycleRotation(this.placement.getRotation(), reverse);
                     this.placement.setRotation(rotation, this.parent);
                     break;
@@ -368,7 +369,7 @@ public class GuiPlacementConfiguration  extends GuiListBase<SubRegionPlacement, 
 
                 case MIRROR:
                 {
-                    boolean reverse = mouseButton == 1;
+                    boolean reverse = mouseButton == InputConstants.MOUSE_BUTTON_RIGHT;
                     Mirror mirror = PositionUtils.cycleMirror(this.placement.getMirror(), reverse);
                     this.placement.setMirror(mirror, this.parent);
                     break;

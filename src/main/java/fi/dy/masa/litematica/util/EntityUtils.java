@@ -489,7 +489,7 @@ public class EntityUtils
         }
 
         entity.setOnGround(nbt.getBooleanOr("OnGround", true));
-        entity.setInvulnerable(nbt.getBooleanOr("Invulnerable", false));
+        entity.setPermanentlyInvulnerable(nbt.getBooleanOr("Invulnerable", false));
         entity.setPortalCooldown(nbt.getIntOr("PortalCooldown", 0));
         /*
         if (nbt.containsUuid("UUID")) {

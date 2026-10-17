@@ -5,14 +5,12 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4fc;
 import org.joml.Vector4f;
 
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.framegraph.FrameGraphBuilder;
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
-import com.mojang.blaze3d.resource.ResourceHandle;
-import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LevelTargetBundle;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -58,13 +56,14 @@ public abstract class MixinLevelRenderer
         }
     }
 
+    // 26.3: addMainPass(...) is called once in render(), after either prepareChunkRenders or prepareChunkRendersIndirect
     @Inject(method = "render",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/LevelRenderer;prepareChunkRenders(Lorg/joml/Matrix4fc;)Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;",
-                    shift = At.Shift.AFTER))
-    private void litematica_onPreRenderMain(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker, boolean renderOutline,
-                                            CameraRenderState cameraState, Matrix4fc modelViewMatrix, GpuBufferSlice terrainFog, Vector4f fogColor,
-                                            boolean shouldRenderSky, CallbackInfo ci,
+                    target = "Lnet/minecraft/client/renderer/LevelRenderer;addMainPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;Z)V",
+                    shift = At.Shift.BEFORE))
+    private void litematica_onPreRenderMain(GraphicsResourceAllocator resourceAllocator, boolean renderOutline,
+                                            CameraRenderState cameraState, GpuBufferSlice terrainFog, Vector4f fogColor,
+                                            boolean shouldRenderSky, boolean consistentDepthRequired, CallbackInfo ci,
                                             @Local(name = "profiler") ProfilerFiller profiler)
     {
         this.profiler = profiler;
@@ -72,8 +71,9 @@ public abstract class MixinLevelRenderer
         LitematicaRenderer.getInstance().capturePreMainValues(cameraState, terrainFog, profiler);
     }
 
-	@Inject(method = "prepareChunkRenders", at = @At("TAIL"))
-    private void litematica_onPrepareBlockLayersPost(Matrix4fc modelViewMatrix, CallbackInfoReturnable<ChunkSectionsToRender> cir)
+	// 26.3 picks one of these two depending on GameRenderer#useImprovedTransparency()
+	@Inject(method = { "prepareChunkRenders", "prepareChunkRendersIndirect" }, at = @At("TAIL"))
+    private void litematica_onPrepareBlockLayersPost(Matrix4fc modelViewMatrix, boolean improvedTransparency, CallbackInfoReturnable<ChunkSectionsToRender> cir)
     {
 	    // Why Iris?
 //		if (IrisCompat.isShaderActive()) { return; }
@@ -81,44 +81,56 @@ public abstract class MixinLevelRenderer
 	    LitematicaRenderer.getInstance().piecewisePrepareBlockLayers(modelViewMatrix, this.profiler);
     }
 
-	// BYTECODE (Virtual Method) Mixin for Section Group rendering
-	@Inject(method = "lambda$addMainPass$0",
+	// 26.3 hands the RenderPass it is recording to executeSolid() / executeClassicTransparency(); draw into that pass,
+	// right after vanilla's own renderGroup() call, like 26.2 did right after its renderGroup() calls.
+	@Inject(method = "executeSolid",
 	        at = @At(value = "INVOKE",
-	                 target = "Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;renderGroup(Lnet/minecraft/client/renderer/chunk/ChunkSectionLayerGroup;Lcom/mojang/blaze3d/textures/GpuSampler;)V",
+	                 target = "Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;renderGroup(Lnet/minecraft/client/renderer/chunk/ChunkSectionLayerGroup;Lcom/mojang/renderpearl/api/commands/RenderPass;Lcom/mojang/renderpearl/api/textures/GpuSampler;Lcom/mojang/renderpearl/api/textures/GpuTextureView;Z)V",
 	                 ordinal = 0,
 	                 shift = At.Shift.AFTER))
-	private void litematica_renderMainSection_Opaque(GpuBufferSlice terrainFog, LevelRenderState levelRenderState, ProfilerFiller profiler,
-													 ChunkSectionsToRender chunkSectionsToRender, Matrix4fc modelViewMatrix,
-													 ResourceHandle<RenderTarget> entityOutlineTarget, FeatureRenderDispatcher.PreparedFrame featureFrame,
-													 ResourceHandle<RenderTarget> translucentTarget, ResourceHandle<RenderTarget> mainTarget,
-													 ResourceHandle<RenderTarget> itemEntityTarget, ResourceHandle<RenderTarget> particleTarget,
-													 CallbackInfo ci)
+	private void litematica_renderMainSection_Opaque(ChunkSectionsToRender chunkSectionsToRender,
+	                                                  FeatureRenderDispatcher.PreparedFrame featureFrame,
+	                                                  RenderPass pass, CallbackInfo ci)
 	{
-		LitematicaRenderer.getInstance().piecewiseDrawBlockLayerGroup(ChunkSectionLayerGroup.OPAQUE, this.chunkLayerSampler);
+		LitematicaRenderer.getInstance().piecewiseDrawBlockLayerGroup(ChunkSectionLayerGroup.OPAQUE, this.chunkLayerSampler, pass);
 	}
 
+	// Classic (non-OIT) transparency: same pass as above
+	@Inject(method = "executeClassicTransparency",
+	        at = @At(value = "INVOKE",
+	                 target = "Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;renderGroup(Lnet/minecraft/client/renderer/chunk/ChunkSectionLayerGroup;Lcom/mojang/renderpearl/api/commands/RenderPass;Lcom/mojang/renderpearl/api/textures/GpuSampler;Lcom/mojang/renderpearl/api/textures/GpuTextureView;Z)V",
+	                 ordinal = 0,
+	                 shift = At.Shift.AFTER))
+	private void litematica_renderMainSection_Translucent(ChunkSectionsToRender chunkSectionsToRender,
+	                                                       FeatureRenderDispatcher.PreparedFrame featureFrame,
+	                                                       RenderPass pass, CallbackInfo ci)
+	{
+		LitematicaRenderer.getInstance().piecewiseDrawBlockLayerGroup(ChunkSectionLayerGroup.TRANSLUCENT, this.chunkLayerSampler, pass);
+	}
+
+	// OIT transparency (new in 26.3): vanilla's main pass is already closed here, so draw the translucent
+	// schematic layer with a pass of our own, as 26.2 effectively did.
 	@Inject(method = "lambda$addMainPass$0",
-			at = @At(value = "INVOKE",
-					 target = "Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;renderGroup(Lnet/minecraft/client/renderer/chunk/ChunkSectionLayerGroup;Lcom/mojang/blaze3d/textures/GpuSampler;)V",
-					 ordinal = 1,
-					 shift = At.Shift.AFTER))
-	private void litematica_renderMainSection_Translucent(GpuBufferSlice terrainFog, LevelRenderState levelRenderState, ProfilerFiller profiler,
-	                                                      ChunkSectionsToRender chunkSectionsToRender, Matrix4fc modelViewMatrix,
-														  ResourceHandle<RenderTarget> entityOutlineTarget, FeatureRenderDispatcher.PreparedFrame featureFrame,
-														  ResourceHandle<RenderTarget> translucentTarget, ResourceHandle<RenderTarget> mainTarget,
-														  ResourceHandle<RenderTarget> itemEntityTarget, ResourceHandle<RenderTarget> particleTarget,
-														  CallbackInfo ci)
+	        at = @At(value = "INVOKE",
+	                 target = "Lnet/minecraft/client/renderer/LevelRenderer;executeOit(Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;)V",
+	                 shift = At.Shift.AFTER))
+	private void litematica_renderMainSection_TranslucentOit(GpuBufferSlice terrainFog, boolean useOit,
+	                                                          ChunkSectionsToRender chunkSectionsToRender,
+	                                                          FeatureRenderDispatcher.PreparedFrame featureFrame,
+	                                                          boolean arg5, boolean arg6, CallbackInfo ci)
 	{
-		LitematicaRenderer.getInstance().piecewiseDrawBlockLayerGroup(ChunkSectionLayerGroup.TRANSLUCENT, this.chunkLayerSampler);
+		LitematicaRenderer.getInstance().piecewiseDrawBlockLayerGroup(ChunkSectionLayerGroup.TRANSLUCENT, this.chunkLayerSampler, null);
 	}
 
+	// Placeholder for the (commented out) Iris main pass handling; 26.3 has no weather pass call any more,
+	// so it is anchored before addMainPass() like the capture above.
 	@Inject(method = "render",
 	        at = @At(value = "INVOKE",
-	                 target = "Lnet/minecraft/client/renderer/LevelRenderer;addWeatherPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lorg/joml/Matrix4fc;)V",
+	                 target = "Lnet/minecraft/client/renderer/LevelRenderer;addMainPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lnet/minecraft/client/renderer/chunk/ChunkSectionsToRender;Z)V",
 	                 shift = At.Shift.BEFORE))
-	private void litematica_renderMainPass(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker,
-	                                       boolean renderOutline, CameraRenderState cameraState, Matrix4fc modelViewMatrix,
-	                                       GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky, CallbackInfo ci,
+	private void litematica_renderMainPass(GraphicsResourceAllocator resourceAllocator, boolean renderOutline,
+	                                       CameraRenderState cameraState, GpuBufferSlice terrainFog, Vector4f fogColor,
+	                                       boolean shouldRenderSky, boolean consistentDepthRequired, CallbackInfo ci,
 	                                       @Local(name = "frame") FrameGraphBuilder frame,
                                            @Local(name = "featureFrame") FeatureRenderDispatcher.PreparedFrame featureFrame,
                                            @Local(name = "profiler") ProfilerFiller profiler)

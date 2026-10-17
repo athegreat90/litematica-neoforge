@@ -2124,7 +2124,7 @@ public class LitematicaSchematic
         }
 
         this.subRegionPositions.put(name, BlockPos.ZERO);
-        this.subRegionSizes.put(name, new BlockPos(size));
+        this.subRegionSizes.put(name, BlockPos.ZERO.offset(size));
         this.metadata.setRegionCount(1);
         this.metadata.setTotalVolume(size.getX() * size.getY() * size.getZ());
         this.metadata.setEnclosingSize(size);
@@ -2272,7 +2272,7 @@ public class LitematicaSchematic
             }
 
             this.subRegionPositions.put(name, BlockPos.ZERO);
-            this.subRegionSizes.put(name, new BlockPos(size));
+            this.subRegionSizes.put(name, BlockPos.ZERO.offset(size));
             this.metadata.setName(name);
             this.metadata.setRegionCount(1);
             this.metadata.setTotalVolume(size.getX() * size.getY() * size.getZ());

@@ -134,7 +134,7 @@ public class SchematicMetadata
 
     public BlockPos getEnclosingSizeAsBlockPos()
     {
-        return new BlockPos(this.enclosingSize);
+        return BlockPos.ZERO.offset(this.enclosingSize);
     }
 
     public long getTimeCreated()

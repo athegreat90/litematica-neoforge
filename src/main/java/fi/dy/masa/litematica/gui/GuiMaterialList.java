@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.ItemStack;
 
@@ -266,7 +267,7 @@ public class GuiMaterialList extends GuiListBase<MaterialListEntry, WidgetMateri
 
                 case LIST_TYPE:
                     BlockInfoListType type = materialList.getMaterialListType();
-                    materialList.setMaterialListType((BlockInfoListType) type.cycle(mouseButton == 0));
+                    materialList.setMaterialListType((BlockInfoListType) type.cycle(mouseButton == InputConstants.MOUSE_BUTTON_LEFT));
                     materialList.reCreateMaterialList();
                     break;
 

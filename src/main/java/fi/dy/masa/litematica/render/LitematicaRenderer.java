@@ -4,8 +4,9 @@ import javax.annotation.Nullable;
 import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4fc;
 
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
@@ -324,12 +325,12 @@ public class LitematicaRenderer
         }
     }
 
-    public void piecewiseDrawBlockLayerGroup(ChunkSectionLayerGroup group, @Nullable GpuSampler sampler)
+    public void piecewiseDrawBlockLayerGroup(ChunkSectionLayerGroup group, @Nullable GpuSampler sampler, @Nullable RenderPass pass)
     {
         if (this.renderPiecewiseBlocks)
         {
             // Use Saved Profiler later
-            this.getWorldRenderer().drawBlockLayerGroup(group, sampler);
+            this.getWorldRenderer().drawBlockLayerGroup(group, sampler, pass);
         }
     }
 
