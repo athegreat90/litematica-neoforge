@@ -782,3 +782,157 @@ In-game follow-up (22:51, same session): with **Improved Transparency ON** (OIT)
 Texture-filtering change (22:53–22:54, same session): Texture Filtering was switched RGSS → Anisotropic → None (`2026-10-17_22.53.53.png`, `…22.54.09.png`). This triggers vanilla's `shouldResetChunkLayerSampler`, so vanilla closed and recreated `chunkLayerSampler`. Afterwards the schematic was still fully textured (`…22.54.15.png`), with no closed-sampler or draw error in the log. **The Area A batch 1 sampler fix is confirmed in game.** Still open in Area A: leaving and rejoining a world, and the AO/colour check by eye.
 
 Rejoin (22:56, same session): Save and Quit to Title, then rejoined "New World". The placement was restored automatically and rendered fully textured (`2026-10-17_22.57.01.png`), with no error in the log. **All Area A in-game checks have passed** except the AO/colour comparison against vanilla, which is judged by eye only.
+
+---
+
+# Test phase (2026-10-17, 23:10–)
+
+Commits under test: `6699bf00`, `427b19a8`, `39b3ca3c`. The test setup is a plain NeoForge 26.3.0.88 server (`run/dedicated`, no Forgematica, `online-mode=false`, creative, `Dev` is operator) plus `runClient --args="--quickPlayMultiplayer localhost:25565"`. Only trusted test schematics were used (`run/schematics/test_26_3.litematic`, generated locally).
+
+## Automated checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| `compileJava` | **PASS** | scratchpad init script `altbuild2.init.gradle` |
+| `test` | **NOT AVAILABLE** | `:compileTestJava NO-SOURCE` (no test source set) |
+| `build` | **PASS** | `<scratchpad>/altbuild/libs/forgematica-0.5.0+mc26.3.jar` |
+| Packaged metadata | **PASS** | jar `META-INF/neoforge.mods.toml`: neoforge/minecraft `[26.3,26.4)`, mafglib `[0.6,)`, foxified_classtweaker `*` required; `mixins.litematica.json`, `litematica.accesswidener` bundled; jar-in-jar only conditional-mixin 0.6.4 |
+| Mixin config | **PASS** | 51/51 listed classes present in the jar, `required: true`, `defaultRequire: 1` |
+| Security (issue #11) | **PASS** | see below |
+| Client launch + server join | **PASS** | server `Done` 23:14:23; client started 23:14:34; `Dev joined the game` 23:14:45; no ERROR/Exception/Mixin/linkage/draw failure in `run/logs/latest.log` |
+| Server log | **PASS** | no errors (only the JNA native-access and Netty kqueue/epoll probe noise) |
+
+New WARN lines (8, at join): `Unable to read property: east/north/south/west with value: "false" for blockstate: {id:"minecraft:cobblestone_wall" | "minecraft:mossy_cobblestone_wall" ...}`. They come from Litematica's 1.12 conversion table (`SchematicConversionMaps`), whose wall entries carry pre-1.16 `false` values. Vanilla keeps the default for those properties. They became visible only after the `BlockStateNbt` fix; before it, those entries silently resolved to air. Benign. Most likely upstream behaviour, but that is not proven on 26.2.
+
+## Security: upstream issue #11 ("Forgematica vulnerability in MC 1.21+")
+
+The upstream fix is `CagayakeGirls/litematica-neoforge` commit `f6dc5247f7` ("fix: warn when pasting with Oversized files", `neoforge/26.1`, 2026-07-05, released as 0.5.1 with MaFgLib 0.5.4). Every line it adds is present in this port: `EntityDataManager` 5/5, `ServuxLitematicaHandler` 24/24, `LitematicaSchematic` 8/8, `SchematicPlacementManager` 7/7, `SchematicBuffer` 10/10, `SchematicBufferManager` 12/12, `en_us.json` 1/1.
+
+- Received schematic files are named `UUID.randomUUID()`; the server-supplied name, a path-traversal vector, is gone.
+- `createBuffer` takes no name, and the file is deleted if parsing fails.
+- The Servux file-transmit receive path (`Litematic-Transmit*` → `LitematicaSchematic#receiveFileTransmit`) is commented out and has **no active caller**.
+- Oversized Servux pastes are refused (`placement_paste_too_large_for_servux`).
+- The 26.3 port never touched `schematic/transmit/`.
+- MaFgLib 0.6.0+mc26.3 (jar built 2026-10-09) is newer than the fixed 0.5.4 line. That part is verified by version and date only, not by reading MaFgLib's code.
+
+## Manual checklist
+
+| Item | Result | Evidence |
+|---|---|---|
+| Minecraft starts with Forgematica + MaFgLib | **PASS** | every session today; `Reloading ResourceManager ... mod/forgematica ... mod/mafglib` |
+| Litematica config GUI opens | **PASS** | `M`+`C` confirmed by the user in game |
+| Hotkeys and mouse controls | **PASS (partial)** | `M` combos; left/right click on `+` (`2026-10-17_21.40.54.png`, Z −5→−4); layer mode `M`+`PAGE_UP` ("Set layer mode to All", `21.34.01.png`). Ctrl/Alt+scroll **NOT TESTED** |
+| Create a simple schematic | **NOT TESTED** | |
+| Save / reload / import `.litematic` | **PARTIAL** | load/import of `test_26_3` **PASS** (`21.32.35.png`); save and reload **NOT TESTED** |
+| Place / move | **PASS** | "Placement created" (`21.32.35.png`); Move to player and typed Z (`21.41.16.png`) |
+| Rotate / mirror | **NOT TESTED** | |
+| Ghost blocks and overlays | **PASS** | after `39b3ca3c`: `22.06.17.png`, `22.48.36.png`, classic + OIT `22.51.27.png`, filtering change `22.54.15.png` |
+| Material list | **PASS** | `2026-10-17_23.57.24.png`: Material List for `test_26_3`, 5 items (glass, glowstone, oak planks, oak stairs, stone), Total/Missing/Available columns, progress 52.6 % |
+| Missing-block indicators | **PASS** | light-blue missing and red wrong-block overlays in the screenshots above |
+| Area selection | **PASS (partial)** | selection with corner boxes (`21.29.16.png`); saving it **NOT TESTED** |
+| Schematic editing tools | **NOT TESTED** | |
+| Creative paste with permissions | **NOT TESTED** | server ready: creative, `Dev` op level 4 (no permission bypass) |
+| Client-only multiplayer on a NeoForge 26.3 server | **PASS** | plain server, no Forgematica: joins at 20:36, 21:11, 23:14 |
+| Persistence across client restarts | **PASS** | "New World" `test_26_3` placement restored on every client launch 21:45–22:58 and after Save & Quit / rejoin (`22.57.01.png`) |
+| Warnings / performance | **PARTIAL** | warnings reviewed (above); no performance measurement |
+
+## Phase status
+
+**NOT COMPLETE.** The automated checks, the security audit and most rendering and multiplayer items pass. These still need someone in game: create and save a schematic, reload it, rotate and mirror, the material list, Ctrl/Alt+scroll, the editing tools and a creative paste. Nothing above is marked PASS without evidence.
+
+## Manual round 2 (23:29–23:57, server + client)
+
+- **Easy place / build-by-schematic: PASS (partial).** The user built from the `test_26_3` placement and the overlays updated live. Before the stair was corrected it showed orange for the wrong state (`23.53.40.png`), and it was correct afterwards (`23.57.07.png`). The placement restriction message "Action prevented by the Easy Place mode" shows (`23.30.30.png`). The tool HUD shows `Mode [2/9]: Schematic Placement` and the placement info (`23.31.08.png`).
+- **Material list: PASS** (see the table).
+- **Observation, server log** (`run/dedicated` task output, 23:52:27): `Rejecting UseItemOnPacket from Dev: Location (195.92, 76.125, -200.67) too far away from hit block BlockPos{x=195, y=77, z=-201}`. Once in the session; the other placements went through. The hit Y is 1.375 below the clicked block's centre, which vanilla rejects (limit 1.0000001). The port did not change the easy-place hit-vector code (only the hand swing), and `easyPlaceProtocolVersion` is `auto`. **Not classified as a port regression without a repro**; needs a targeted test (easy-place a bottom-half stair/slab against the block above, on a vanilla server).
+- **Not done:** saving a schematic (no new file in `run/schematics`; `prueba` ended up typed into chat), rotate/mirror, creative paste, Ctrl/Alt+scroll (only the mode HUD was seen).
+
+Phase status unchanged: **NOT COMPLETE**.
+
+## Manual round 3 (23:59–00:02)
+
+- **Schematic save (write path): PASS.** `run/schematics/test_26_4.litematic` (23:59) is a re-save of the loaded `test_26_3` (same metadata name and author). Decoded: Version 7, DataVersion 5023, 6 palette entries all written with `Name` / `Properties` (e.g. `minecraft:oak_stairs` + `{facing:north, half:bottom, shape:straight, waterlogged:false}`), no `id` keys. This confirms `BlockStateNbt#writeBlockState` keeps the `.litematic` format.
+- **Text input in Litematica GUIs: PASS.** `prueba` typed into the Area Editor save-name field (`2026-10-18_00.02.06.png`), with the "Hold shift to overwrite" tooltip.
+- **Area selection from the user's build: NOT TESTED / user setup.** The tool was in `Mode [7/9]: Move`, not Area Selection (`00.01.06.png`). Corner 1 stayed at 0,0,0 and corner 2 is 195,76,-201, so the selection is 196×77×202 (`00.01.25.png`, `00.01.34.png`). It was not saved; it would be a ~3 M-block schematic. Earlier (21:29) both corners were set by clicks in Area Selection mode, so the click handling itself works. Needs a redo in Area Selection mode.
+
+## Manual round 4 (00:20–00:21)
+
+- **Area selection by tool clicks: PASS.** In `Mode [1/9]: Area Selection` a left click set corner 1 (`p1: 193, 76, -196`) and a right click set corner 2 (`2026-10-18_00.20.54.png` … `00.21.11.png`, `Dim: 3x1x4`, `6x1x4`, `3x1x7`). The earlier "corner 1 stuck at 0,0,0" was the tool being in Move mode.
+- **Cosmetic, upstream (not a port regression):** the action-bar text reads literally `Set/moved point %d to %s`. Litematica passes the arguments (`KeyCallbacks:763`, `SelectionManager:591`), but MaFgLib's `InfoUtils#printActionbarMessage` (with `enableActionbarMessages` on) sends `Component.translatable(key, args)`, and vanilla translation only supports `%s` / `%n$s`, so any `%d` key (21 in `en_us.json`) shows raw on that path. GUI labels that go through `StringUtils.translate`/`String.format` render fine ("Regions: 1"). Left unchanged (upstream text and behaviour).
+- **Stuck task:** the earlier save of the 196×77×202 selection is still queued ("Save Schematic, remaining chunks (40)"). It waits for chunks that are not loaded; expected Litematica behaviour. To be removed in the Task Manager.
+
+## Manual round 5 (00:24–00:26)
+
+- **Create and save a schematic from the world: PASS.** Area Selection `Dim: 1x2x1` (`2026-10-18_00.25.13.png`) was saved through Area Editor → Save Schematic as `run/schematics/prueba.litematic` (00:26:12, listed in `00.26.21.png`). Decoded: Version 7, DataVersion 5023, author `Dev`, 2 blocks: `minecraft:rail {shape: east_west}` and `minecraft:ladder {facing: west}`, palette written with `Name`/`Properties`. The selection was one column (ladder + rail), not the whole build, but it exercises the full world → `.litematic` path.
+- **Task Manager removal: PASS.** The stuck "Save Schematic, remaining chunks (40)" overlay is gone.
+- Note for the paste test: the paste/fill/delete tool modes run on the `executeOperation` hotkey, which is unbound by default (`Hotkeys.java`, `KeyCallbacks:529`), so it has to be bound first.
+
+## Manual round 6 (00:30–00:33): rotate / mirror
+
+- **Load the user-made schematic + placement: PASS.** `prueba` loaded as a placement, moved with "Move to player" (origin 201, 77, -203), ghost ladder and rail textured (`2026-10-18_00.30.32.png`).
+- **Rotate: PASS.** Rotation NONE → CW_90 (`00.31.09.png` → `00.31.22.png`). After the change the HUD shows the ghost `minecraft:ladder facing: north`; it was saved as `facing: west`, and CW 90° maps west → north. The ghost rail turned to the other axis (`00.31.43.png`). Block-state rotation is applied correctly.
+- **Mirror: NOT VERIFIED.** `00.32.53.png` shows the placement, but no screenshot shows the Mirror value or an unambiguous mirrored state.
+
+## Manual round 7 (00:35–00:41): mirror, hotkey binding, creative paste
+
+- **Mirror setting: PARTIAL.** Mirror cycled to `LEFT_RIGHT` together with `CW_90` (`2026-10-18_00.35.23.png`). The ghost of a 1×2×1 ladder-and-rail column does not visibly change under this mirror, so the mirrored block state is not proven by a screenshot.
+- **Hotkey rebinding in the config GUI: PASS.** `executeOperation` was bound to `J` through Configuration menu → Hotkeys, search `exe` (`00.38.26.png`). This also covers config search and text input.
+- **Ctrl+scroll tool mode: PASS.** The user switched between Area Selection, Move, Schematic Placement and Paste Schematic in world during rounds 3–7 (HUD `Mode [n/9]` in the screenshots).
+- **Creative paste on a plain server with operator permission: PASS.** Server log: `[Dev: Changed the block at 201, 77, -203]` and `[Dev: Changed the block at 201, 78, -203]` (00:41:28), and the real ladder and rail are visible (`00.41.34.png`). The paste goes through vanilla commands sent as the operator; no permission is bypassed. The action bar reads "Schematic pasted using 0 fill and 0 setblock commands" even though 2 blocks changed. That counter text is Litematica's own message, not investigated further (cosmetic).
+
+## Test phase summary (2026-10-18 00:45)
+
+| Area | Result |
+|---|---|
+| Build, metadata, mixins, security #11 | PASS |
+| Client + plain server launch, logs | PASS (no errors; benign 1.12-conversion WARNs) |
+| Config GUI, hotkeys, hotkey rebinding, Ctrl+scroll, left/right click | PASS |
+| Create, save, reload `.litematic`; format check | PASS (`prueba.litematic`, `test_26_4.litematic`) |
+| Place, move, rotate | PASS |
+| Mirror | PARTIAL (value set; mirrored state not visually proven) |
+| Ghost blocks, overlays, missing/wrong indicators, OIT, filtering, rejoin, restarts | PASS |
+| Material list | PASS |
+| Area selection | PASS |
+| Creative paste with permission | PASS |
+| Schematic editing tools (fill/replace/delete), Alt+scroll nudge | NOT TESTED |
+| Performance measurement | NOT TESTED |
+| Easy-place "too far away" server rejection (1 occurrence) | OPEN, needs a repro |
+
+**Phase status: NOT COMPLETE.** Still open: fill/replace/delete, Alt+scroll, a visible mirror check, and the easy-place rejection repro.
+
+## Manual round 8 (00:50–01:08): mirror, easy place, editing tools
+
+- **Mirror (visible): PASS.** `test_26_3` with `Mirror: FRONT_BACK` (`2026-10-18_00.50.23.png`, `01.04.02.png`): the planks and stairs moved to the other side of the glowstone compared with the unmirrored placement (`2026-10-17_22.57.01.png` vs `2026-10-18_01.04.20.png`, `01.08.09.png`).
+- **Easy place on a server: PASS.** With `easyPlaceMode=true` (`01.05.34.png`) the user placed stone, glass, glowstone and planks from the ghosts at several angles (`01.06.36.png` … `01.08.09.png`); "Action prevented by the Easy Place mode" appears when clicking where no ghost needs that block (`01.07.29.png`). Server log: still only the single `Rejecting UseItemOnPacket ... too far away` from 23:52:27, no new rejection in this round. Treated as a one-off (not reproduced), noted as a watch item.
+- **Fill / Replace / Delete, Alt+scroll nudge: NOT VERIFIED.** No screenshot shows the Fill, Replace or Delete tool mode or the nudge. A stone floor appears under the moved placement (`01.04.20.png`), possibly from a Fill, but that is not proven, and the server log has no fill/setblock output for it (`commandDisableFeedback` is on).
+
+## Test phase status after round 8
+
+**NOT COMPLETE.** Everything in the checklist is PASS except: the editing tools (Fill, Replace, Delete), the Alt+scroll nudge, and a performance measurement (NOT TESTED). There is one watch item: the single easy-place rejection, not reproduced.
+
+## Manual round 9 (01:13–01:14): Alt+scroll and Delete
+
+- **Alt+scroll nudge: PASS.** Corner 2 moved from X 203 to 206 (`Dim: 6x2x4` → `9x2x4`) with Alt+wheel in Area Selection mode (`2026-10-18_01.13.24.png` → `01.13.45.png`). In Corners mode the nudge moves the selected corner, which is Litematica's behaviour.
+- **Delete tool: PASS.** In `Mode [8/9]: Delete` with "Delete target mode: Current Area" (`01.14.09.png`), `J` ran the operation. Server log `[01:14:14] [Dev: Successfully filled 43 block(s)]`; the action bar shows the same (`01.14.22.png`). It runs as a vanilla `/fill` with operator permission. The night scene makes the visual difference hard to see; the server confirmation is the evidence.
+
+## Final test-phase status (2026-10-18 01:15)
+
+| Result | Items |
+|---|---|
+| PASS | build; metadata; mixins; security #11; client + plain server; config GUI; hotkeys and rebinding; Ctrl/Alt+scroll; left/right click; text fields; create, save and reload `.litematic`; place, move, rotate, mirror; ghost blocks, overlays, OIT, filtering, rejoin, restarts; material list; area selection; easy place; creative paste; Delete (via `/fill`) |
+| NOT TESTED | Replace tool; performance measurement |
+| WATCH | one easy-place "too far away" server rejection (23:52), not reproduced in a later 8-block easy-place round |
+| Defects fixed during the phase | ghost blocks not rendering (`39b3ca3c`) |
+
+**Phase status: NOT COMPLETE (formally).** Two items were not executed: the Replace tool and a performance measurement. Every core function the port touched has passed in game. Replace shares its command path with the Delete and Fill operations, which passed.
+
+## Manual round 10 (01:19–01:23): Replace
+
+- **Replace tool: PARTIAL.** `Mode [4/9]: Replace block` ran on `J`: "Scheduled task added..." (`2026-10-18_01.23.15.png`). The HUD shows `Block: Stone` and `Replace: Stone`, so both tool blocks were set to stone. The vanilla command therefore reported "No blocks were filled" (red), which is correct for stone → stone. The selection, block pick (Alt+middle click) and command path work. A real change still needs a second block picked with Shift+middle click.
+
+## Session close (2026-10-18 01:40)
+
+- Client and server stopped. Client log: 0 errors. Server log: only the Netty kqueue/epoll platform probes and the `Connection reset` from closing the client; the single `Rejecting UseItemOnPacket` at 23:52:27 never recurred.
+- **Replace: PARTIAL, closed.** A second attempt was not completed: the user had the planks in hand instead of the tool, and no placed plank to target. The command path itself ran ("No blocks were filled" for stone → stone). Not a defect.
+
+**Test phase verdict: NOT COMPLETE (formally).** Open items: Replace with two different blocks, a performance measurement, and the one-off easy-place rejection (watch). All other checklist items PASS, with evidence above. No unexecuted test is marked PASS.
