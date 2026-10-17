@@ -713,7 +713,72 @@ Checked with `javap -c` on `mafglib-0.6.0+mc26.3.jar`:
 
 | Area | Batches | Static result | Still needs in-game checking |
 |---|---|---|---|
-| A Rendering | 1 | sampler lifecycle fixed; OIT and classic hooks mutually exclusive | rejoin, texture-filtering change, OIT vs classic visuals, overlays |
+| A Rendering | 2 | sampler lifecycle fixed; OIT and classic hooks mutually exclusive; no render hook lost (batch 2) | rejoin, texture-filtering change, OIT vs classic visuals, AO and colours. **Confirmed in game:** wrong-block overlay and placement box (screenshot `2026-10-17_20.37.25.png`) |
 | B Input and GUI | 1 | SDL mouse buttons fixed; hotkeys and text focus verified | left/right click on GUI buttons, text fields, `PAGE_UP/PAGE_DOWN`, Ctrl/Alt+scroll. **Confirmed in game (2026-10-17, multiplayer):** the `M` combos (`M,C`, `M,P`, `M,R`, `M,G`, `M,T`) work when `M` is held. MaFgLib matches them by scancode on both sides (`ScanCodes.getScanCodeFromName` / `KeyEvent#key()`). |
 | C Mixins and access | 1 | 50/51 mixins applied at runtime, anchors unchanged, F3+B mixin checked statically | F3+B hitboxes, easy place, signs, mirrored/rotated blocks, fluids in a normal install |
 | D Dependencies | 2 | ranges capped, Foxified declared, networking and client-only separation verified | 26.4 refusal screen, Servux round trip |
+
+---
+
+# Area A (Rendering), batch 2: findings (2026-10-17)
+
+Read-only batch: **no defect found, no source change**. `compileJava` and `runClient` were not re-run because nothing compiled changed. The user chose to record the findings rather than run an automated in-game session. Nothing committed, pushed or published.
+
+## Removed pre-weather hook: nothing lost
+
+The port removed `RenderEventHandler.getInstance().registerWorldPreWeatherRenderer(renderer)` from `InitHandler`, because MaFgLib 0.6.0 no longer has that method. Its `RenderEventHandler` only offers in-game GUI, world-last and tooltip-last registration, and `IRenderer` has no pre-weather callback. The 26.2 `RenderHandler` (`git show 72c1a0f2`) never overrode the pre-weather callback; it only inherited the empty default. The removal therefore drops no rendering feature. Everything Litematica draws in the world still goes through `onRenderWorldLast` (boxes, verifier mismatches, rebuild-targeting overlay) and `onExtractGuiOverlayPost` (info HUD, tool HUD, hover info, preview frame).
+
+## Overlays and placement boxes: confirmed in game
+
+The multiplayer screenshot `run/screenshots/2026-10-17_20.37.25.png` shows both the wrong-block overlay (magenta) and the placement's enclosing box (cyan). They are drawn by `RenderHandler#onRenderWorldLast` → `OverlayRenderer#renderBoxes` / `renderSchematicVerifierMismatches` with MaFgLib 0.6.0's pipelines, so the world-last hook and those pipelines work on 26.3.
+
+## Ready-made check for OIT vs classic and rejoin (not run yet)
+
+- "New World" keeps a saved placement (`run/config/litematica/litematica_New World_dim_minecraft_overworld.json`: `test_26_3` at 183,67,11, enabled, rendering on). It is restored on join, so a plain join already exercises the rejoin path.
+- The transparency mode is `improvedTransparency` in `run/options.txt` (currently `false`, classic). It can also be changed in Video Settings.
+- Procedure:
+  1. Run `./gradlew runClient --args="--quickPlaySingleplayer \"New World\""` (use the scratchpad init script if the IDE locks `build/classes`).
+  2. Look at the placement and press F2.
+  3. Quit, switch Improved Transparency on, and repeat.
+  4. Compare the two screenshots: glass and other translucent ghost blocks should appear exactly once (not doubled, not missing), and the overlay and box should be present in both.
+  5. Check `run/logs/latest.log` for `ChunkRenderBatchDraw#draw(): failed`, Shaderc or pipeline messages.
+
+## Still open in Area A
+
+- OIT vs classic visuals (procedure above).
+- Texture-filtering sampler reset: change Texture Filtering in Video Settings while a placement is visible. The schematic must stay textured, and no closed-sampler error may appear.
+- Ambient occlusion and colour accuracy, which can only be judged by eye.
+
+Next area: **B (Input and GUI)**, where only in-game checks remain: left/right click on the ± buttons, text fields, `PAGE_UP/PAGE_DOWN`, Ctrl/Alt+scroll.
+
+---
+
+# Area A (Rendering), batch 3: schematic blocks never rendered (2026-10-17)
+
+Found during the in-game test: placement boxes and overlay colors drew, but the textured ghost blocks themselves never did. Every earlier screenshot only showed overlays. The magenta "extra" overlay in those screenshots was the clue: the schematic reported air where the world had blocks. Diagnosed with temporary logging (since removed) in a singleplayer session with the saved `test_26_3` placement. Two independent defects:
+
+## Defect 1: every schematic palette entry was read as air
+
+Minecraft 26.3 changed `NbtUtils#readBlockState` / `#writeBlockState` from the keys `Name` / `Properties` to `id` / `properties` (checked with `javap -c` on both jars). `.litematic` palettes (and Litematica's conversion maps) use `Name` / `Properties`, so `readBlockState` found no `id`, returned air for every entry, and the schematic loaded with 0 blocks. Evidence: the placer read `nonAirStates=0` out of 48 positions before the fix and `38` (the schematic's block count) after it. The vanilla `writeBlockState` would also have saved schematics with `id` / `properties`, which other Litematica versions can't read.
+
+Fix: new `util/BlockStateNbt` with `readBlockState(HolderGetter<Block>, CompoundTag)`, which accepts either layout (it renames `Name`/`Properties` to `id`/`properties` on a copy and lets vanilla parse), and `writeBlockState(BlockState)`, which writes `Name`/`Properties`. Every call site now uses it: both palette implementations (read and write), `SchematicConversionMaps` (2 reads) and `LitematicaSchematic` (3 reads: palettes, vanilla structures, legacy conversion). No `NbtUtils.read/writeBlockState` call remains. The `.litematic` file format is unchanged.
+
+## Defect 2: solid, cutout and wireframe terrain pipelines had no color target
+
+Hidden behind defect 1 (nothing was ever drawn): once blocks existed, the opaque draw failed with `IllegalStateException: Render pass color attachment count must match pipeline color target state count` (`FrontendRenderPass#setPipeline`). In renderpearl the `RenderPipeline.Builder` starts with 0 color targets, and only `withColorTargetState` adds one. Vanilla's `SOLID_TERRAIN` sets `ColorTargetState.DEFAULT` explicitly. `LitematicaPipelines.LEGACY_TERRAIN_STAGE` set none, so only the translucent pipelines (which set `BlendFunction.TRANSLUCENT`) had a target.
+
+Fix: `LEGACY_TERRAIN_STAGE` declares `withColorTargetState(ColorTargetState.DEFAULT)`. The translucent snippet still overrides target 0 with its blend.
+
+## Result
+
+Verified in game (screenshot `run/screenshots/2026-10-17_22.06.17.png`): textured glass ghost blocks with the missing-block tint, the wrong-block and extra-block overlays, and the placement box. The HUD shows `Schematic: minecraft:glass`. After the second fix the log has no ERROR besides the IDE-only `Waking up threads` trace.
+
+Lesson: `ChunkRenderBatchDraw` logs only the first draw failure, and `WorldPlacingUtils#placeToProtoChunk` still swallows exceptions (upstream code), so "no error in the log" was not proof of rendering. A screenshot of the ghost blocks themselves is.
+
+Test-data note: for the diagnosis, the saved `test_26_3` placement in `run/config/litematica/litematica_New World_dim_minecraft_overworld.json` was moved next to the player (-118, 68, 138). The original is in `….json.bak` (git-ignored run directory).
+
+In-game follow-up (22:51, same session): with **Improved Transparency ON** (OIT) the schematic renders exactly like classic mode, with no doubled or missing translucent faces (screenshot `2026-10-17_22.51.27.png`, settings in `…22.51.18.png`). Switching it back off and opening Video Settings produced no error in the log. Texture Filtering showed RGSS in both settings screenshots, so a filtering *change* (the sampler-reset path) is still not proven.
+
+Texture-filtering change (22:53–22:54, same session): Texture Filtering was switched RGSS → Anisotropic → None (`2026-10-17_22.53.53.png`, `…22.54.09.png`). This triggers vanilla's `shouldResetChunkLayerSampler`, so vanilla closed and recreated `chunkLayerSampler`. Afterwards the schematic was still fully textured (`…22.54.15.png`), with no closed-sampler or draw error in the log. **The Area A batch 1 sampler fix is confirmed in game.** Still open in Area A: leaving and rejoining a world, and the AO/colour check by eye.
+
+Rejoin (22:56, same session): Save and Quit to Title, then rejoined "New World". The placement was restored automatically and rendered fully textured (`2026-10-17_22.57.01.png`), with no error in the log. **All Area A in-game checks have passed** except the AO/colour comparison against vanilla, which is judged by eye only.

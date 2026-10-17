@@ -94,6 +94,8 @@ public class LitematicaPipelines
 			              .withVertexBinding(0, DefaultVertexFormat.BLOCK)
 			              .withPrimitiveTopology(PrimitiveTopology.QUADS)
 			              .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, true))
+			              // 26.3 pipelines start with no color target; like vanilla's SOLID_TERRAIN, declare the one the pass has
+			              .withColorTargetState(ColorTargetState.DEFAULT)
 			              .buildSnippet();
 
 	private static final RenderPipeline.Snippet LEGACY_TERRAIN_TRANSLUCENT_STAGE =

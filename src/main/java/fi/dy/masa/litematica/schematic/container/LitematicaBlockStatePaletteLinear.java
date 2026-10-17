@@ -8,7 +8,6 @@ import net.minecraft.core.HolderGetter;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -19,6 +18,7 @@ import io.netty.buffer.ByteBuf;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.PrimitiveCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import fi.dy.masa.litematica.util.BlockStateNbt;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 
 public class LitematicaBlockStatePaletteLinear implements ILitematicaBlockStatePalette
@@ -155,7 +155,7 @@ public class LitematicaBlockStatePaletteLinear implements ILitematicaBlockStateP
         for (int i = 0; i < size; ++i)
         {
             CompoundTag tag = tagList.getCompoundOrEmpty(i);
-            BlockState state = NbtUtils.readBlockState(lookup, tag);
+            BlockState state = BlockStateNbt.readBlockState(lookup, tag);
 
             if (i > 0 || state != LitematicaBlockStateContainer.AIR_BLOCK_STATE)
             {
@@ -178,7 +178,7 @@ public class LitematicaBlockStatePaletteLinear implements ILitematicaBlockStateP
                 state = LitematicaBlockStateContainer.AIR_BLOCK_STATE;
             }
 
-            CompoundTag tag = NbtUtils.writeBlockState(state);
+            CompoundTag tag = BlockStateNbt.writeBlockState(state);
             tagList.add(tag);
         }
 

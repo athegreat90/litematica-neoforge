@@ -235,7 +235,7 @@ public class SchematicConversionMaps
             //RegistryEntryLookup<Block> lookup = Registries.BLOCK.getReadOnlyWrapper();
             HolderGetter<Block> lookup = SchematicWorldHandler.INSTANCE.getRegistryManager().lookupOrThrow(Registries.BLOCK);
             // Store the id + meta => state maps before renaming the block for the state <=> state maps
-            BlockState state = net.minecraft.nbt.NbtUtils.readBlockState(lookup, newStateTag);
+            BlockState state = fi.dy.masa.litematica.util.BlockStateNbt.readBlockState(lookup, newStateTag);
             //System.out.printf("id: %5d, state: %s, tag: %s\n", idMeta, state, newStateTag);
             ID_META_TO_BLOCKSTATE.putIfAbsent(idMeta, state);
 
@@ -287,7 +287,7 @@ public class SchematicConversionMaps
             //RegistryEntryLookup<Block> lookup = Registries.BLOCK.getReadOnlyWrapper();
             HolderGetter<Block> lookup = SchematicWorldHandler.INSTANCE.getRegistryManager().lookupOrThrow(Registries.BLOCK);
             // Store the id + meta => state maps before renaming the block for the state <=> state maps
-            BlockState state = net.minecraft.nbt.NbtUtils.readBlockState(lookup, newStateTag);
+            BlockState state = fi.dy.masa.litematica.util.BlockStateNbt.readBlockState(lookup, newStateTag);
             //System.out.printf("id: %5d, state: %s, tag: %s\n", idMeta, state, newStateTag);
             ID_META_TO_BLOCKSTATE.putIfAbsent(idMeta, state);
 

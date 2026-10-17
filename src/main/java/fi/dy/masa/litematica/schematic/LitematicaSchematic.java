@@ -1716,7 +1716,7 @@ public class LitematicaSchematic
         for (int id = 0; id < size; ++id)
         {
             CompoundTag tag = tagList.getCompoundOrEmpty(id);
-            BlockState state = net.minecraft.nbt.NbtUtils.readBlockState(lookup, tag);
+            BlockState state = fi.dy.masa.litematica.util.BlockStateNbt.readBlockState(lookup, tag);
             list.add(state);
         }
 
@@ -2226,7 +2226,7 @@ public class LitematicaSchematic
                     t = SchematicConversionMaps.updateBlockStates(t, minecraftDataVersion);
                 }
 
-                BlockState state = net.minecraft.nbt.NbtUtils.readBlockState(lookup, t);
+                BlockState state = fi.dy.masa.litematica.util.BlockStateNbt.readBlockState(lookup, t);
                 list.add(state);
             }
 
@@ -2424,7 +2424,7 @@ public class LitematicaSchematic
         for (int i = 0; i < size; ++i)
         {
             CompoundTag tag = palette.getCompoundOrEmpty(i);
-            BlockState state = net.minecraft.nbt.NbtUtils.readBlockState(lookup, tag);
+            BlockState state = fi.dy.masa.litematica.util.BlockStateNbt.readBlockState(lookup, tag);
 
             if (i > 0 || state != LitematicaBlockStateContainer.AIR_BLOCK_STATE)
             {
