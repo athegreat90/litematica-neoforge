@@ -672,3 +672,48 @@ The three `JarSelector` WARN lines (mixinextras, conditional_mixin, the Foxified
 ## Status of the four areas
 
 A (Rendering), B (Input and GUI), C (Mixins and access) and D (Dependencies) have each had one batch. The remaining open items are all runtime checks listed in their "Needs runtime validation" sections: OIT visuals and the filtering change, GUI left/right click and text fields, easy place, signs, F3+B hitboxes, fluids in a production install, and Servux.
+
+---
+
+# Area D (Dependencies), batch 2: networking and client-only separation (2026-10-17)
+
+Result: **no defect found, no Java change.** `compileJava` PASS. Nothing committed, pushed or published. Documentation updated: `CLAUDE.md`, `CHANGELOG.md` (26.3 entry); `MEMORY.md` is a local, untracked file.
+
+## Networking (Servux `servux:litematics`) against MaFgLib 0.6.0
+
+Checked with `javap -c` on `mafglib-0.6.0+mc26.3.jar`:
+
+- **Receiving:** `IPluginClientPlayHandler` now extends NeoForge's `IPayloadHandler<T>`, and its default `handle(T, IPayloadContext)` calls `receivePlayPayload(T, IPayloadContext)`. The 26.2 code overrode a Fabric `receive(payload, ClientPlayNetworking.Context)` in the anonymous `INSTANCE`; the empty `new ServuxLitematicaHandler<>() {}` is correct now, not a lost override.
+- **Registration:** `NeoForgeClientNetworking.registerPayloads` registers through `RegisterPayloadHandlersEvent.registrar("1").optional()`. The channel is optional, so a server without Servux accepts the client (proven below). The payload is registered once, from the `Forgematica` constructor (runtime batch).
+- **Sending:** `sendPlayPayload` checks the channel ID, `isPlayRegistered`, `checkFailures()` (implemented here: `failures <= MAX_FAILURES`) and `NeoForgeClientNetworking.canSend(type)` before `send`, and logs a WARN instead of throwing when the server lacks the channel.
+- **Lifecycle:** `EntityDataManager#onWorldPre` and the sync tick call `registerPlayReceiver(...)`, and turning sync off calls `unregisterPlayReceiver()`. On logout, `ServuxLitematicaHandler#reset` clears `servuxRegistered`, the failures and the reading session but **not** `payloadRegistered`. That is required, because registration cannot be repeated after startup: a rejoin can register the receiver again. The reset logic is unchanged from 26.2.
+
+## Client-only separation
+
+- `Forgematica` is `@Mod(dist = CLIENT)`, and every initialisation (pipelines, config screen, Servux payload, `Litematica#onInitialize`) is also behind `FMLLoader...getDist().isClient()`.
+- FML 12.0.12 has no `displayTest` key (not present in the loader jar), so there is no mod-list option to add.
+- The common mixins that touch server classes (`MixinMinecraftServer`, `MixinServerGamePacketListenerImpl_easyPlace`) apply on the **integrated** server only. A dedicated server cannot load the mod at all: MaFgLib 0.6.0 crashes there (`NoClassDefFoundError: ClientLevel`, seen with Loom's `runServer`). That is MaFgLib's limitation, not Forgematica's, and it matches the mod's client-only scope.
+
+## Runtime evidence: plain NeoForge server + modded client
+
+`run/dedicated` (NeoForge 26.3.0.88, no mods, `online-mode=false`, `white-list=false`) with `runClient` joined over `localhost:25565`:
+
+- Server log: `Dev joined the game` and later `Dev lost connection: Disconnected`. The `SocketException: Connection reset` came from the client being terminated.
+- Client log: no Mixin, linkage, payload or rendering error. The placement rendered with the wrong-block overlay (screenshot `run/screenshots/2026-10-17_20.37.25.png`).
+
+## Startup re-check
+
+`runClient` after this batch: it started, loaded the mods, reached the title screen and joined a singleplayer world (`Dev joined the game`, 20:53). There was no Mixin, linkage, missing-class, payload or rendering error. The only WARN lines are vanilla's own command-argument ambiguity notices and MaFgLib's language-option notice; the only ERROR lines are the IDE-only `Waking up threads...` debug trace.
+
+## Remaining risk
+
+- A Servux round trip (metadata, entity/block-entity NBT, bulk data) cannot be tested without a Servux server for 26.3. The send/receive path is verified statically only.
+
+## Status of the four areas
+
+| Area | Batches | Static result | Still needs in-game checking |
+|---|---|---|---|
+| A Rendering | 1 | sampler lifecycle fixed; OIT and classic hooks mutually exclusive | rejoin, texture-filtering change, OIT vs classic visuals, overlays |
+| B Input and GUI | 1 | SDL mouse buttons fixed; hotkeys and text focus verified | left/right click on GUI buttons, text fields, `PAGE_UP/PAGE_DOWN`, Ctrl/Alt+scroll. **Confirmed in game (2026-10-17, multiplayer):** the `M` combos (`M,C`, `M,P`, `M,R`, `M,G`, `M,T`) work when `M` is held. MaFgLib matches them by scancode on both sides (`ScanCodes.getScanCodeFromName` / `KeyEvent#key()`). |
+| C Mixins and access | 1 | 50/51 mixins applied at runtime, anchors unchanged, F3+B mixin checked statically | F3+B hitboxes, easy place, signs, mirrored/rotated blocks, fluids in a normal install |
+| D Dependencies | 2 | ranges capped, Foxified declared, networking and client-only separation verified | 26.4 refusal screen, Servux round trip |
