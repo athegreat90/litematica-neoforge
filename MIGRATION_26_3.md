@@ -936,3 +936,151 @@ Phase status unchanged: **NOT COMPLETE**.
 - **Replace: PARTIAL, closed.** A second attempt was not completed: the user had the planks in hand instead of the tool, and no placed plank to target. The command path itself ran ("No blocks were filled" for stone → stone). Not a defect.
 
 **Test phase verdict: NOT COMPLETE (formally).** Open items: Replace with two different blocks, a performance measurement, and the one-off easy-place rejection (watch). All other checklist items PASS, with evidence above. No unexecuted test is marked PASS.
+
+---
+
+# Verification re-run (2026-10-18, HEAD `ed59aaca`)
+
+Fresh automated run on the current HEAD (working tree clean, only untracked `.atl/`). Nothing was changed in the sources, nothing was committed, pushed or published. Build output went to a scratchpad directory through a Gradle init script (`-I`), because VS Code's Java language server is running.
+
+| Check | Result | Evidence |
+|---|---|---|
+| `compileJava` | **PASS** | `BUILD SUCCESSFUL in 18s` |
+| `test` | **NOT AVAILABLE** | `:compileTestJava NO-SOURCE`, `:test NO-SOURCE` (no test source set) |
+| `build` | **PASS** | `forgematica-0.5.0+mc26.3.jar` + sources jar |
+| Packaged metadata | **PASS** | `neoforge` and `minecraft` `[26.3,26.4)`, `mafglib` `[0.6,)`, `foxified_classtweaker` `*` (all `required`); jar-in-jar: `conditional-mixin-neoforge-0.6.4.jar` only |
+| Mixin config | **PASS** | `required: true`, `defaultRequire: 1`, `compatibilityLevel: JAVA_25`; 51/51 listed classes are in the jar; `litematica.accesswidener` bundled |
+| Security (issue #11) | **PASS (static)** | `SchematicBuffer:31` names files `UUID.randomUUID()`; `SchematicBufferManager#createBuffer` takes no file name; `Files.delete`/`deleteIfExists` on failure (`SchematicBuffer:96,127`, `SchematicBufferManager:125`); the `Litematic-Transmit*` receive path in `ServuxLitematicaHandler:144-146` is still commented and `LitematicaSchematic#receiveFileTransmit` has no active caller; `placement_paste_too_large_for_servux` still used at `SchematicPlacementManager:1139` |
+| Dedicated server (plain NeoForge 26.3.0.88, no Forgematica) | **PASS** | `Done` at 09:51:27 (`run/dedicated`); only the known Netty kqueue/epoll probe and JNA noise |
+| Client launch + client-only join | **PASS** | `runClient --quickPlayMultiplayer localhost:25565`; `Dev joined the game` at 09:51:51 |
+| Client logs (`run/logs/latest.log`, `debug.log`) | **PASS** | 0 ERROR/FATAL, 0 Exception/`Caused by`, 0 `InvalidInjection`/`InvalidMixin`, 0 `NoClassDefFound`/`IllegalAccess`/`NoSuchMethod`/`NoSuchField`, no Shaderc/pipeline message, no `draw(): failed`, no `Cannot register payload`; 49 mixins reported as applied at join |
+
+WARN lines seen (all known or vanilla): the 3 `JarSelector` dev-classpath lines, vanilla command-argument ambiguity, MaFgLib language-option notices, the 8 cobblestone-wall 1.12-conversion warnings, `Ignoring chat session from Dev due to missing Services public key` (offline mode) and `Requested post effect does not exist: minecraft:end_of_frame` (also present in the 2026-10-17 logs, so not new).
+
+Limits of this run: it proves launch, mixin application and a clean join only. A clean log does not prove rendering; the rendering, GUI and gameplay results stay as recorded in the earlier rounds ("carried over", not re-executed here).
+
+## Status of the checklist
+
+| Item | Result |
+|---|---|
+| Build, metadata, mixins, security #11, launch, client-only multiplayer | **PASS** (re-executed above) |
+| Config GUI, hotkeys, place/move/rotate/mirror, ghost blocks and overlays, material list, area selection, save/reload `.litematic`, easy place, creative paste with permission, Delete tool, persistence across restarts | **PASS** (carried over from rounds 1-9, not re-executed) |
+| Replace tool with two different blocks | **PARTIAL**, needs a person in game |
+| Performance measurement | **NOT TESTED**, needs a person in game |
+| Easy-place `Rejecting UseItemOnPacket ... too far away` (single occurrence, 23:52) | **WATCH**, not reproduced; needs a targeted repro |
+| Production class tweak (fluids in a non-dev install) and 26.4 refusal screen | **NOT TESTED** (no such install) |
+
+**Phase status: NOT COMPLETE (formally).** The remaining items need manual interaction, so the run stops here.
+
+## Manual round 11 (2026-10-18 10:00-10:18): Replace, FPS, easy place
+
+Setup: plain NeoForge 26.3.0.88 server (`run/dedicated`, no Forgematica) + `runClient --quickPlayMultiplayer localhost:25565`, creative, `Dev` operator. Evidence: screenshots `run/screenshots/2026-10-18_10.*.png` and the server output.
+
+- **Replace tool with two different blocks: PASS.** Area selection `5x1x1` by tool clicks (`10.01.21`), `Mode [4/9]: Replace block` with HUD `Block: Glass` / `Replace: Stone` (`10.04.16`). After `J` the five stone blocks are glass (`10.04.37`, `10.04.50`). Server log: `[10:04:34] [Dev: Successfully filled 5 block(s)]`. The tool was run twice more (`10:07:18`, `10:10:18`, both `Successfully filled 5 block(s)`). Block 1 = Alt+middle click, block 2 = Shift+middle click, confirmed in `Hotkeys.java` (`toolSelectModifierBlock1/2`) and the user's `litematica.json`.
+- **Performance: PARTIAL (condition A only).** F3 shows 767, 781, 816 and 854 fps with a placement loaded, Anisotropic 2x, Improved Transparency OFF (`10.11.42`, `10.15.25`, `10.15.48`, `10.15.59`; Video Settings in `10.07.38`; F3 reads `T: inf (immediate) @144Hz`, RTX 5080, Ryzen 9 9950X3D). No screenshot shows the schematic hidden (`M,G`), Improved Transparency ON, or walking/chunk loading, so the cost of the schematic and the OIT cost are **not** measured. No 26.2 reference exists either. No stutter was reported.
+- **Easy place: no rejection, but the risky case is not proven covered.** The server log for 09:51-10:18 has **no** `Rejecting UseItemOnPacket` line. Stairs were placed from the ghosts (`10.17.06`, `10.18.09`); the HUD there shows schematic `facing: north` vs client `facing: south` (orange wrong-state overlay). That is expected on this server: `PlacementHandler#getEffectiveProtocolVersion` resolves `AUTO` to `SLAB_ONLY` when the server is neither local, Servux nor Carpet, so only slab halves are encoded and stair facing follows the player. It is not a port regression. Whether a bottom-half stair/slab was placed against the block above (the 23:52 case) is not visible in the screenshots, so the WATCH item stays open.
+- **Client log (`run/logs/latest.log`):** 0 Exception / `Caused by` / `draw(): failed` / `InvalidInjection`. Correction: the log does hold 8 `ERROR` lines (10:10:54-10:11:08), all `(litematica) addTask: [EMPTY] Waking up threads...` from the Replace runs; it is the known harmless message logged at ERROR level, with no stack trace, not a failure.
+- Side note: a held F2 produced 24 screenshots in 23 seconds (`10.15.25`-`10.15.48`); harmless, they can be deleted.
+
+Updated status: Replace moves from PARTIAL to **PASS**. Still open: performance conditions B (schematic hidden), C (Improved Transparency ON) and D (walking), and the easy-place bottom-half repro. Phase status: **NOT COMPLETE (formally)**.
+
+## Manual round 12 (2026-10-18 10:56-11:54): performance conditions B, C, D
+
+Same setup as round 11 (plain NeoForge server + `runClient`, creative, `Dev`). Spot: X 337.3, Y 71.2, Z -96.5, facing south, placement loaded. F3 reads `T: inf (immediate) @144Hz`, RTX 5080, Ryzen 9 9950X3D, Anisotropic 2x, 1918x2080. Evidence: `run/screenshots/2026-10-18_10.56.30.png`, `11.51.23.png`, `11.51.34.png`, `11.52.10.png`, `11.52.40.png`, `11.53.27.png`, `11.53.46.png` (plus the held-F2 bursts around them).
+
+| Condition | Improved Transparency | Schematic | FPS (F3) | Evidence |
+|---|---|---|---|---|
+| A (round 11) | OFF | shown | 767, 781, 816, 854 | `10.11.42`-`10.15.59` |
+| B | OFF | hidden (`M,G`) | 852 | `10.56.30` (message `Toggled Schematic Rendering OFF`; no orange overlay, no ghost planks) |
+| C, standing | ON | shown | 758, 691 | `11.51.23`, `11.51.34` |
+| D, moving | ON | shown | 726, 653 | `11.52.10`, `11.52.40` |
+| A control | OFF | shown | 823 | `11.53.46` |
+
+- Reading: with the schematic hidden the game runs at about 852 fps and with it shown at 767-854 (control 823), so the classic schematic layer costs little or nothing measurable on this machine. Improved Transparency ON lowers the standing rate to about 691-758 (roughly 10 percent below the control) and moving to about 653-726. These are single F3 samples, not averages, and there is no 26.2 baseline, so this measures the port's own schematic/OIT cost only, not a regression against 26.2.
+- Visual check with Improved Transparency ON (`11.51.23`, `11.51.34`, `11.52.10`): glass ghost faces complete, ghost planks visible through the glass, orange wrong-state overlay on the stairs, selection boxes and the water-filled glass row all drawn. No doubled or missing glass faces seen.
+- Not valid as samples: `11.51.12` and `11.53.35` (Video Settings open, 582 and 596 fps). `10.57.44` (899 fps) is not used because the screenshots do not prove whether the schematic was shown or hidden at that moment.
+- **Stutter: NOT ASSESSED.** The user did not report freezes and a still image cannot show them, so no PASS or FAIL for the walking test beyond the fps numbers above.
+- Logs after round 11: client `run/logs/latest.log` has no new ERROR/Exception after 10:11:08. Server output has 0 `Rejecting UseItemOnPacket` / `too far away` for the whole session; its last lines are only `/time` commands (10:55:43, 11:50:30).
+
+Updated status: performance **PARTIAL-PASS** (A, B, C and moving fps measured, no perceptible cost problem, stutter not assessed, no 26.2 baseline). Still open: easy-place bottom-half repro (WATCH), production class tweak and 26.4 refusal screen (NOT TESTED). Phase status: **NOT COMPLETE (formally)**.
+
+## Manual round 13 (2026-10-18 12:20-13:12): easy place under a ceiling (WATCH item)
+
+Setup: same plain NeoForge 26.3.0.88 server + `runClient`. Test schematic generated locally with a stdlib script: `run/schematics/easyplace_ceiling.litematic` (8x3x2, Litematica v7, data version 5023; stone floor and ceiling, middle layer = 4 oak slabs and 12 oak stairs, bottom and top halves, so every piece sits between a real floor and a real ceiling). The `run/` directory is git-ignored. Protocol in effect: `AUTO` resolved to `SLAB_ONLY` (plain server).
+
+| Step / case | Piece | Result | Evidence |
+|---|---|---|---|
+| A | 16 floor stones | **PASS** | Material List Stone Missing 16 / Done 33.3 % (`12.28.09`) |
+| B | 16 ceiling stones placed in the air, no support block | **PASS** | Stone Missing 0 / Done 66.7 % after Refresh (`12.32.19`) |
+| 1 | slab, bottom half, floor below, ceiling above | **PASS** | real slab in the lower half, HUD `type: bottom`, no `Client` diff panel, Oak Slab Missing 3 (`12.34.11`, `12.34.27`) |
+| 9 | slab, bottom half (second row) | **PASS** | placed, Oak Slab Missing 2 (`12.37.35`); no HUD capture |
+| 2 | slab, top half, touching the ceiling | **PASS** | real slab under the ceiling, Oak Slab Missing 1, Done 72.9 % (`12.48.16`, `12.48.24`) |
+| 3 | stair, bottom, facing north | **PASS** | real stair in the lower half, not orange, Oak Stairs Missing 11 (`12.51.36`, `12.51.49`) |
+| 4 | stair, bottom, facing east | **PASS** | placed in the lower half; orange because the client got `facing: north` vs schematic `east` (`12.53.37`) |
+| 5 | stair, bottom, facing south | **PASS** | HUD `Schematic facing: south / half: bottom`, `Client facing: north / half: bottom`, `shape: straight` (`13.00.42`) |
+| 7 | stair, top half, touching the ceiling, facing north | **PASS** | HUD shows only the `Schematic` panel (`half: top`), no diff; not orange (`13.09.39`) |
+| 8 | stair, top half, touching the ceiling, facing south | **PASS** | HUD `Schematic facing: south / half: top`, `Client facing: north / half: top`, `shape: straight` (`13.11.13`) |
+
+- **Not tested on purpose:** stair bottom facing west (case 6) and the second-row copies of the other pieces (cases 10-16). Facing is not encoded on this server, so the west case runs the same code path as east and south, and the second row repeats the same block states. Not a proof, a decision to skip duplicates.
+- **Expected behaviour, not a defect:** with `SLAB_ONLY`, `half` and slab `type` are right, but stair `facing` follows the direction the player looks, so stairs whose schematic facing differs from the player's show the orange wrong-state overlay.
+- **Server evidence:** `0` lines matching `Rejecting UseItemOnPacket` or `too far away` over the whole session (09:51-13:12), with 32 stone blocks (16 floating), 3 slabs and 5 stairs placed in this round. The 17 `Player Dev standing on air - force-sending blocks below` lines are vanilla anti-fly notices and unrelated.
+- **Client log:** no Exception, `Caused by`, `InvalidInjection`, `IllegalAccessError` or `draw(): failed`; the only ERROR lines are the known `addTask: [EMPTY] Waking up threads...`. 214 `[WorldRenderer] setupTerrain / chunksToUpdate: 1` WARN lines are gated by `Reference.DEBUG_MODE` (`WorldRendererSchematic.java:600-602`, dev only).
+- **Loose end:** after case 4 the Material List showed `Stone Missing 1` (it was 0 at 12:48). One floor or ceiling stone was removed by hand between 12:48 and 12:57; not located, no effect on the cases above.
+- **Screenshot note:** the HUD text next to F3 is unreadable with F3 on; cases 5-8 were captured with F3 off.
+
+Updated status: the easy-place `Rejecting UseItemOnPacket ... too far away` WATCH item (single occurrence on 2026-10-17 23:52, not reproduced) is now **closed as not reproduced** after 8 placements under a ceiling (3 slabs, 5 stairs) plus 32 stone placements with no rejection on a plain server. It stays a WATCH only for non-plain servers (Servux/Carpet protocols V2/V3 encode data in the hit vector and were not exercised). Still **NOT TESTED**: production class tweak (fluids in a non-dev install) and the 26.4 refusal screen (no such installs). Stair-half behaviour was confirmed for bottom and top; stair facing mismatch on plain servers is expected. Phase status: **complete with documented gaps** (NOT TESTED items above, no 26.2 performance baseline, stutter not assessed).
+
+## Finalization of the private 26.3 port (2026-10-18)
+
+Source under test: `ed59aaca` plus the working-tree changes listed at the end. Nothing in `src/` was changed in this step, so the in-game results of rounds 1-13 still describe the same code. **No new runtime session was run in this step**; every runtime claim below is carried over from the earlier rounds, and the packaged jar was never launched outside `runClient`.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Java 25 | **PASS** | `java -version` = 25.0.4.1; `Forgematica.class` and `Litematica.class` have class-file major version 69 (Java 25); `options.release = 25` |
+| Gradle build with the wrapper | **PASS** (redirected dir) | `gradlew.bat clean build` in the repo fails before compiling: `buildSrc/build/classes/java/main` is locked by the IDE's Java language server (`Unable to delete directory`). With the init script that redirects the build directories (`-I altbuild.init.gradle`, fresh directory, so a clean build) `build` is **BUILD SUCCESSFUL in 19s**; `compileJava` ok (only deprecation/unchecked notes), `test` NO-SOURCE |
+| Licence packaging | **FIXED, PASS** | `jar {}` did `from("LICENSE")` but the file is `LICENSE.txt`, so no licence was packaged (also on `neoforge/26.2`). Now `from("LICENSE.txt")` with `.get()`; the jar contains `LICENSE.txt_forgematica`, byte-identical to `LICENSE.txt` (LGPL-3.0) |
+| Mod metadata | **PASS** | `neoforge.mods.toml`: modId `forgematica` (+ `litematica` stub), version `0.5.0+mc26.3`, license `LGPLv3`, credits `masa`, authors `TexTrue, CagayakeGirls`, `javafml [4,)` |
+| Dependency ranges | **PASS** | neoforge `[26.3,26.4)`, minecraft `[26.3,26.4)`, mafglib `[0.6,)`, foxified_classtweaker `*` (all `required`) |
+| Mixin config | **PASS** | `required: true`, `defaultRequire: 1`, `compatibilityLevel JAVA_25`; 23 common + 28 client + 0 server = 51 entries, all 51 classes present in the jar |
+| Resources | **PASS** | `litematica.accesswidener`, `assets/litematica/**` (13 language files, `legacy_terrain.vsh/fsh`), `icon.png`; jar-in-jar only `conditional-mixin-neoforge-0.6.4.jar` |
+| Resolved runtime versions | **PASS** | NeoForge 26.3.0.88 (Minecraft 26.3 merged), MaFgLib 0.6.0+mc26.3, Foxified ClassTweaker 0.1.0-alpha.4, conditional-mixin 0.6.4. MaFgLib's own `neoforge.mods.toml` requires `foxified_classtweaker` and `[26.2,)` |
+| Client side only | **PASS** (carried over) | `@Mod(dist = CLIENT)`; 0 server mixins; joined a plain NeoForge 26.3 server with nothing of ours server-side (earlier rounds) |
+| Security, upstream issue #11 | **PASS** | see below |
+| Regression greps | **PASS** | `NbtUtils.readBlockState/writeBlockState` only inside `util/BlockStateNbt`; payload registered from the `Forgematica` constructor and the `registerPipelines` listener added there; `ServuxLitematicaHandler#reset` does not clear `payloadRegistered`; mouse buttons via `InputConstants.MOUSE_BUTTON_*` (11 uses); the shared `chunkLayerSampler` is only read, never stored or closed |
+| GitHub Actions | **NOT TESTED** | YAML of both workflows parses; only `GITHUB_TOKEN` is referenced; the release step was run locally with a stubbed `gh` and `bash -n` (tag `mc26.3-build.7-ed59aac`, 2 jars attached, fails if not exactly one main jar). Not executed on GitHub: nothing was pushed |
+| `neoforge/26.2` untouched | **PASS** | tip still `72c1a0f28b409583f14235960798934bf44fc1e3` |
+
+### Security review of upstream issue #11 (trusted schematics only)
+
+Issue #11 (open, `CagayakeGirls/litematica-neoforge`): a malicious server could make the client write a file with a server-chosen name (for example `mods/somevirus.litematic.jar`). The upstream fix is commit `f6dc5247f7`, which is not in the local clone, so ancestry could not be checked with git; instead every hunk of its patch (read with `gh api`) was checked against this port:
+
+- `ServuxLitematicaHandler`: block/entity NBT and bulk replies are processed only when `servuxRegistered`; the `Litematic-Transmit*` switch is commented out and `handleBulkData` goes straight to `handleBulkEntityData` (lines 87-101, 144-163). No live caller of `receiveFileTransmit` or `sendTransmitFile` remains.
+- `SchematicBuffer`: no `name` field, the file is `UUID.randomUUID().toString()` (line 31) with `getFileNameWithExt()`.
+- `SchematicBufferManager`: `createBuffer` takes no name; a schematic that fails to parse deletes its file (lines 114-125).
+- `LitematicaSchematic`: `FileName` is no longer put into the transmit start tag, `createBuffer(totalSlices, ...)` has no name, both transmit methods are `@Deprecated(forRemoval = true)`. The remaining `putString("FileName", ...)` at line 3223 is in the debug-only `toString()` and is identical upstream.
+- `SchematicPlacementManager`: slicing for Servux is commented out and an oversized paste shows `litematica.message.error.placement_paste_too_large_for_servux` (also in `en_us.json`).
+- `EntityDataManager`: the `ENTITY_DATA_SYNC` guard is present (line 156).
+- Sweep of every `Files.write*`, `FileOutputStream`, `FileWriter`, `new File(`, `Path.of`, `Paths.get` and `.resolve(` in `src/main/java`: the only file-writing path fed by network data is `SchematicBuffer` (UUID name, and unreachable from the network because the receive path is commented out). The other hits take names typed by the user in the GUI, config JSON, or fixed names; I read the hits by call site and by the caller search for the placement path, not every GUI flow line by line. `SchematicPlacement.createFromNbt` does call `Path.of(name)` with a string from NBT, but its only caller is the commented-out Servux block.
+- Only the locally generated schematics in `run/schematics/` were ever loaded.
+
+### Build output
+
+- Jar: `C:\Users\alexa\OneDrive\Documentos\GitRepo\litematica-neoforge\build\libs\forgematica-0.5.0+mc26.3.jar` (1,930,054 bytes, SHA-256 `11ff186709f78c3c712af78b37c4ac6b2d153afac38bd83239cbfc474b4ef1f9`) plus `forgematica-0.5.0+mc26.3-sources.jar` in the same folder.
+- It was built into a redirected directory (`<scratchpad>\altbuild\root\libs`) because of the IDE lock and then copied to `build/libs/` after checking the old file: the previous jar there dated from 2026-10-17 15:07, before the block-state fix `39b3ca3c`, and lacked `BlockStateNbt` and the licence, so it would have loaded every palette entry as air.
+
+### Completed versus untested
+
+- Completed and verified in game (dev environment, see the rounds above): config GUI, hotkeys and mouse, load/import, place/move/rotate/mirror, ghost blocks and overlays, material list, area selection, Replace and Delete tools, creative paste with permission, easy place (bottom and top halves under a ceiling, plain server), client-only multiplayer, persistence across restarts.
+- NOT TESTED: a normal launcher install of the packaged jar (access widener, fluids, `IllegalAccessError` risk), the 26.4 dependency screen, the Servux and Carpet easy place protocols (V2/V3), Iris, the new workflows on GitHub, stutter while moving, any 26.2 performance baseline.
+
+### Known issues
+
+- With the plain-server easy place protocol (`SLAB_ONLY`) stair facing follows the player, so mismatched stairs show the orange overlay (expected).
+- Improved Transparency costs about 10 percent in the single sample taken.
+- Log noise: `addTask: [EMPTY] Waking up threads...` at ERROR level, and `setupTerrain` WARN lines that only appear with `Reference.DEBUG_MODE`.
+- The repository is public, so the pre-releases created by `release-26.3.yml` are public; forks must enable Actions; re-running a workflow run reuses the tag and `gh release create` then fails instead of overwriting.
+- The IDE's Java language server locks `buildSrc/build` and `build/classes`; use the init-script pattern from `CLAUDE.md`.
+
+### Files modified in this step (not committed)
+
+`build.gradle` (licence packaging), `README.md` (private install, requirements, limitations), `CLAUDE.md` (CI note), `MIGRATION_26_3.md`, new `.github/workflows/build.yml` (restored from `neoforge/26.2` plus `permissions: contents: read`) and new `.github/workflows/release-26.3.yml`. `build/libs/` (git-ignored) holds the new jars. The `.atl/` folder was already untracked.

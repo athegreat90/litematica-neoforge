@@ -15,7 +15,7 @@ Windows: use `gradlew.bat`; elsewhere `./gradlew`. Requires **JDK 25** (`options
 - There is **no test source set and no lint config**. Verification is compile + launching the client.
 - If an IDE's Java language server locks `build/classes` (`Unable to delete directory`), build into another directory with a Gradle init script passed via `-I` that sets `layout.buildDirectory` on the root project (skip `buildSrc`), instead of editing build files or killing the IDE.
 - Multiplayer testing: the mod and MaFgLib are client-only, and MaFgLib crashes on a dedicated server (`NoClassDefFoundError: ClientLevel`), so Loom's `runServer` cannot work. Use a plain NeoForge server (`online-mode=false`; 26.3 defaults to `white-list=true`) and join it from `runClient`.
-- The `neoforge/26.3` branch is a stopgap until the official developers port 26.3, so `.github/` (CI and release workflows) was removed here. The `publisher {}` block in `build.gradle` and the `publishing {}` block still exist; do not run `publish`/`publishMods` without explicit authorization.
+- The `neoforge/26.3` branch is a stopgap until the official developers port 26.3. Its CI is `.github/workflows/build.yml` (build + artifact, read-only token) and `.github/workflows/release-26.3.yml` (every push to `neoforge/26.3` builds with the wrapper on Java 25 and creates a GitHub **pre-release** with the jars, using only `GITHUB_TOKEN`). The 26.2 `release.yml` (Modrinth, CurseForge, KTT Maven) was deliberately not restored. The `publisher {}` block in `build.gradle` and the `publishing {}` block still exist but nothing calls them; do not run `publish`/`publishMods` without explicit authorization. The repo is public, so those pre-releases are public.
 
 ## Version bumps (Minecraft upgrade)
 
