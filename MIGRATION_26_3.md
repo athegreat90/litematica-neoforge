@@ -1047,7 +1047,7 @@ Source under test: `ed59aaca` plus the working-tree changes listed at the end. N
 | Client side only | **PASS** (carried over) | `@Mod(dist = CLIENT)`; 0 server mixins; joined a plain NeoForge 26.3 server with nothing of ours server-side (earlier rounds) |
 | Security, upstream issue #11 | **PASS** | see below |
 | Regression greps | **PASS** | `NbtUtils.readBlockState/writeBlockState` only inside `util/BlockStateNbt`; payload registered from the `Forgematica` constructor and the `registerPipelines` listener added there; `ServuxLitematicaHandler#reset` does not clear `payloadRegistered`; mouse buttons via `InputConstants.MOUSE_BUTTON_*` (11 uses); the shared `chunkLayerSampler` is only read, never stored or closed |
-| GitHub Actions | **NOT TESTED** | YAML of both workflows parses; only `GITHUB_TOKEN` is referenced; the release step was run locally with a stubbed `gh` and `bash -n` (tag `mc26.3-build.7-ed59aac`, 2 jars attached, fails if not exactly one main jar). Not executed on GitHub: nothing was pushed |
+| GitHub Actions | **PASS** (ran on GitHub) | Before pushing: YAML of both workflows parsed, only `GITHUB_TOKEN` is referenced, and the release step was run locally with a stubbed `gh` and `bash -n`. After pushing `eeee28a7` to `neoforge/26.3`: `build` (run 39130243236) and `release-26.3` (run 39130243301) both finished with success (2m7s and 2m16s), and pre-release `mc26.3-build.1-eeee28a` was created with `forgematica-0.5.0+mc26.3.jar` (1,928,988 bytes) and the `-sources.jar`. The CI jar differs in size from the local one (1,930,054 bytes, built on another machine) and was **not launched in game** |
 | `neoforge/26.2` untouched | **PASS** | tip still `72c1a0f28b409583f14235960798934bf44fc1e3` |
 
 ### Security review of upstream issue #11 (trusted schematics only)
@@ -1071,14 +1071,14 @@ Issue #11 (open, `CagayakeGirls/litematica-neoforge`): a malicious server could 
 ### Completed versus untested
 
 - Completed and verified in game (dev environment, see the rounds above): config GUI, hotkeys and mouse, load/import, place/move/rotate/mirror, ghost blocks and overlays, material list, area selection, Replace and Delete tools, creative paste with permission, easy place (bottom and top halves under a ceiling, plain server), client-only multiplayer, persistence across restarts.
-- NOT TESTED: a normal launcher install of the packaged jar (access widener, fluids, `IllegalAccessError` risk), the 26.4 dependency screen, the Servux and Carpet easy place protocols (V2/V3), Iris, the new workflows on GitHub, stutter while moving, any 26.2 performance baseline.
+- NOT TESTED: a normal launcher install of the packaged jar (access widener, fluids, `IllegalAccessError` risk), the 26.4 dependency screen, the Servux and Carpet easy place protocols (V2/V3), Iris, launching the jar built by CI (the workflows themselves ran on GitHub), stutter while moving, any 26.2 performance baseline.
 
 ### Known issues
 
 - With the plain-server easy place protocol (`SLAB_ONLY`) stair facing follows the player, so mismatched stairs show the orange overlay (expected).
 - Improved Transparency costs about 10 percent in the single sample taken.
 - Log noise: `addTask: [EMPTY] Waking up threads...` at ERROR level, and `setupTerrain` WARN lines that only appear with `Reference.DEBUG_MODE`.
-- The repository is public, so the pre-releases created by `release-26.3.yml` are public; forks must enable Actions; re-running a workflow run reuses the tag and `gh release create` then fails instead of overwriting.
+- The repository is public, so the pre-releases created by `release-26.3.yml` are public (the first one, `mc26.3-build.1-eeee28a`, already is); every push to `neoforge/26.3`, docs-only ones included, creates another; forks must enable Actions; re-running a workflow run reuses the tag and `gh release create` then fails instead of overwriting.
 - The IDE's Java language server locks `buildSrc/build` and `build/classes`; use the init-script pattern from `CLAUDE.md`.
 
 ### Files modified in this step (not committed)
