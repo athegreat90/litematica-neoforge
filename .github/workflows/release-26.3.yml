@@ -1,0 +1,104 @@
+# Unofficial CI release for the private Forgematica 26.3 port.
+#
+# Every push to neoforge/26.3 builds the jar with the repository Gradle wrapper (Java 25) and publishes it as a
+# GitHub *pre-release* of this repository, tagged uniquely per build so nothing is ever overwritten.
+#
+# It never runs `publish` or `publishMod` and never touches Modrinth, CurseForge, Maven or Docker registries.
+# The only credential used is the built-in GITHUB_TOKEN.
+
+name: release-26.3
+
+on:
+  push:
+    branches: [ neoforge/26.3 ]
+
+# Release builds run one at a time and are never cancelled half way.
+concurrency:
+  group: release-26.3
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    # Do not run in forks of this repository.
+    if: github.repository == 'athegreat90/litematica-neoforge' && github.ref == 'refs/heads/neoforge/26.3'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+        with:
+          # Do not leave the write token in .git while Gradle runs.
+          persist-credentials: false
+
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v5
+
+      - name: setup jdk 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: setup gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: build
+        run: ./gradlew build
+
+      - name: create github pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_NUMBER: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+          jars=(build/libs/forgematica-*.jar)
+          main_jars=()
+          for jar in "${jars[@]}"; do
+            case "$jar" in
+              *-sources.jar) ;;
+              *) main_jars+=("$jar") ;;
+            esac
+          done
+
+          if [ "${#main_jars[@]}" -ne 1 ]; then
+            echo "Expected exactly one forgematica jar in build/libs, found ${#main_jars[@]}" >&2
+            ls -la build/libs >&2
+            exit 1
+          fi
+
+          short_sha="${COMMIT_SHA:0:7}"
+          tag="mc26.3-build.${RUN_NUMBER}-${short_sha}"
+          title="Forgematica 26.3 build ${RUN_NUMBER} (${short_sha})"
+
+          cat > release-notes.md <<EOF
+          Unofficial CI build of the private Forgematica port for Minecraft 26.3, built from commit ${COMMIT_SHA}.
+
+          This is a pre-release, not an official release. Client side only; do not install it on a server.
+
+          Requires, in the same \`mods\` folder:
+          - NeoForge 26.3.0.88 (any 26.3.x)
+          - MaFgLib 0.6.0+mc26.3
+          - Foxified ClassTweaker 0.1.0-alpha.4
+
+          See README.md for installation steps and known limitations.
+          EOF
+
+          gh release create "$tag" "${jars[@]}" \
+            --target "$COMMIT_SHA" \
+            --title "$title" \
+            --notes-file release-notes.md \
+            --prerelease \
+            --latest=false

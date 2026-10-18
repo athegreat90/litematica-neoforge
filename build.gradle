@@ -112,8 +112,8 @@ java {
 }
 
 jar {
-	from("LICENSE") {
-		rename { "${it}_${base.archivesName}"}
+	from("LICENSE.txt") {
+		rename { "${it}_${base.archivesName.get()}"}
 	}
 }
 
